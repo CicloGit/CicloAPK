@@ -153,55 +153,55 @@ export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {
     await ensureSeedData();
     const snapshot = await getDocs(financialDetailsCollection);
-    const mapped: Record<string, FinancialDetails> = {};
+    const acc: Record<string, FinancialDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toFinancialDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      mapped[details.projectId] = details;
+      acc[details.projectId] = details;
     });
-    return mapped;
+    return acc;
   },
 
   async listAnimalDetails(): Promise<Record<string, AnimalProductionDetails>> {
     await ensureSeedData();
     const snapshot = await getDocs(animalDetailsCollection);
-    const mapped: Record<string, AnimalProductionDetails> = {};
+    const acc: Record<string, AnimalProductionDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toAnimalDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      mapped[details.projectId] = details;
+      acc[details.projectId] = details;
     });
-    return mapped;
+    return acc;
   },
 
   async listSectorDetails(): Promise<Record<string, SectorSpecificData>> {
     await ensureSeedData();
     const snapshot = await getDocs(sectorDetailsCollection);
-    const mapped: Record<string, SectorSpecificData> = {};
+    const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      mapped[docSnapshot.id] = details;
+      acc[docSnapshot.id] = details;
     });
-    return mapped;
+    return acc;
   },
 
   async listStageDetails(): Promise<Record<string, SectorSpecificData>> {
     await ensureSeedData();
     const snapshot = await getDocs(stageDetailsCollection);
-    const mapped: Record<string, SectorSpecificData> = {};
+    const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      mapped[docSnapshot.id] = details;
+      acc[docSnapshot.id] = details;
     });
-    return mapped;
+    return acc;
   },
 
   async listProjectStages(): Promise<Record<string, ProjectStage[]>> {
     await ensureSeedData();
     const snapshot = await getDocs(projectStagesCollection);
-    const mapped: Record<string, ProjectStage[]> = {};
+    const acc: Record<string, ProjectStage[]> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
-      mapped[docSnapshot.id] = toProjectStages(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
+      acc[docSnapshot.id] = toProjectStages(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
     });
-    return mapped;
+    return acc;
   },
 
   async listAuditEvents(): Promise<AuditEvent[]> {

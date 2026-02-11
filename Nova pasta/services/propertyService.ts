@@ -173,14 +173,12 @@ async function ensureSeedData() {
 }
 
 export const propertyService = {
-  getEmptyProperty(): Property {
-    return {
-      ...mockPropertyData,
-      pastureManagementHistory: [...mockPropertyData.pastureManagementHistory],
-      perimeter: [...(mockPropertyData.perimeter ?? [])],
-      infrastructure: [...(mockPropertyData.infrastructure ?? [])],
-      machinery: [...(mockPropertyData.machinery ?? [])],
-    };
+  async listProductionProjects(): Promise<ProductionProject[]> {
+    await ensureSeedData();
+    const snapshot = await getDocs(projectCollection);
+    return snapshot.docs
+      .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .sort((a: ProductionProject, b: ProductionProject) => a.name.localeCompare(b.name));
   },
 
   async loadWorkspace(

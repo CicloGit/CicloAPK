@@ -42,7 +42,8 @@ const toAnalysisRecord = (id: string, raw: Record<string, unknown>): AIAnalysisR
 
 export const aiAnalysisService = {
   async listAnalyses(): Promise<AIAnalysisRecord[]> {
-    const snapshot = await getDocs(query(analysesCollection, orderBy('createdAt', 'desc'), limit(50)));
+    await ensureSeedData();
+    const snapshot = await getDocs(analysesCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toAnalysisRecord(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );

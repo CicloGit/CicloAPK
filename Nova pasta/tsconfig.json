@@ -11,11 +11,29 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "functions"]
+  "include": [
+    "App.tsx",
+    "index.tsx",
+    "constants.ts",
+    "types.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "services/**/*.ts",
+    "services/**/*.tsx",
+    "contexts/**/*.ts",
+    "contexts/**/*.tsx",
+    "config/**/*.ts",
+    "config/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "vite-env.d.ts",
+    "firebase-shims.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
 }

@@ -30,11 +30,30 @@ interface ProducerDashboardProps {
 }
 
 const getSectorConfig = (sector: ProductionSector) => {
-    switch (sector) {
-        case 'Agricultura': return { icon: '??', quickActions: [{ id: 'registerPlanting', label: 'Registrar Plantio' }, { id: 'sellCrop', label: 'Vender Safra' }], summaryTitle: 'Resumo da Lavoura' };
-        case 'Pecuária (Bovinos Corte)': return { icon: '??', quickActions: [{ id: 'registerAnimal', label: 'Registrar Animal' }, { id: 'sellBatch', label: 'Vender Lote' }], summaryTitle: 'Resumo do Rebanho' };
-        default: return { icon: '??', quickActions: [], summaryTitle: 'Resumo da Produção' };
+    if (sector === 'Agricultura') {
+        return {
+            icon: '??',
+            quickActions: [
+                { id: 'registerPlanting', label: 'Registrar Plantio' },
+                { id: 'sellCrop', label: 'Vender Safra' },
+            ],
+            summaryTitle: 'Resumo da Lavoura',
+        };
     }
+
+    // Avoid brittle accent/encoding mismatch by checking the domain token.
+    if (sector.includes('Bovinos Corte')) {
+        return {
+            icon: '??',
+            quickActions: [
+                { id: 'registerAnimal', label: 'Registrar Animal' },
+                { id: 'sellBatch', label: 'Vender Lote' },
+            ],
+            summaryTitle: 'Resumo do Rebanho',
+        };
+    }
+
+    return { icon: '??', quickActions: [], summaryTitle: 'Resumo da Produ??o' };
 };
 
 const DashboardSkeleton: React.FC = () => (

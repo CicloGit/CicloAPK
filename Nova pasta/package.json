@@ -5,11 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.json && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "functions:install": "cd functions && npm install",
-    "functions:build": "cd functions && npm run build",
+    "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
     "emulators:start": "npx firebase-tools emulators:start --import=.firebase/emulator-data --export-on-exit=.firebase/emulator-data",
     "emulators:clean": "npx firebase-tools emulators:start --only auth,firestore,storage,functions",
     "firebase:deploy:rules": "npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage",
