@@ -1,0 +1,559 @@
+openapi: 3.0.3
+info:
+  title: Agro Compliance Gates API
+  version: 1.0.1
+  description: 'API para controle de rastreabilidade de gado por lote/animal, evidências
+    (RFID, GPS, balança, câmera), travas automáticas por divergência e liberação condicionada
+    por ciclo/conferência e mudança de estágio.
+
+    '
+servers:
+- url: http://localhost:3000
+tags:
+- name: Saude
+- name: Matrizes
+- name: Nascimento
+- name: Ciclos
+- name: Conferencia
+- name: Operacoes
+- name: Animais
+components:
+  schemas:
+    Evidence:
+      type: object
+      required:
+      - type
+      - timestamp
+      - payload
+      properties:
+        type:
+          type: string
+          enum:
+          - RFID
+          - GPS
+          - BALANCA
+          - CAMERA
+          - DOCUMENTO
+        timestamp:
+          type: string
+          description: Data e hora em ISO 8601.
+        payload:
+          type: object
+          additionalProperties: true
+    CreateMotherRequest:
+      type: object
+      required:
+      - orgId
+      - orgCode
+      properties:
+        orgId:
+          type: string
+        orgCode:
+          type: string
+          minLength: 2
+          maxLength: 3
+          description: Codigo curto da organizacao (2 a 3 caracteres).
+    Mother:
+      type: object
+      properties:
+        orgId:
+          type: string
+        motherId:
+          type: string
+        motherCode:
+          type: string
+          description: Codigo curto ORG-SEQ-DC
+        seq:
+          type: integer
+        childSeqCounter:
+          type: integer
+        status:
+          type: string
+          enum:
+          - ATIVA
+          - BAIXADA
+    RegisterBirthRequest:
+      type: object
+      required:
+      - orgId
+      - motherId
+      - pastoId
+      - birthDate
+      - qtdFilhotes
+      - evidences
+      properties:
+        orgId:
+          type: string
+        motherId:
+          type: string
+        pastoId:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        qtdFilhotes:
+          type: integer
+          minimum: 1
+          maximum: 10
+        evidences:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+    RegisterBirthResponse:
+      type: object
+      properties:
+        eventStatus:
+          type: string
+          enum:
+          - APROVADO
+          - PENDENTE
+        calfIds:
+          type: array
+          items:
+            type: string
+        calfCodes:
+          type: array
+          items:
+            type: string
+        evidenceScore:
+          type: number
+    OpenCycleRequest:
+      type: object
+      required:
+      - orgId
+      - periodStart
+      - periodEnd
+      properties:
+        orgId:
+          type: string
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+    Cycle:
+      type: object
+      properties:
+        orgId:
+          type: string
+        cycleId:
+          type: string
+        status:
+          type: string
+          enum:
+          - OPEN
+          - PENDING_CONFERENCE
+          - CLOSED
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        inventory:
+          type: object
+          properties:
+            completed:
+              type: boolean
+        conference:
+          type: object
+          properties:
+            conferenceId:
+              type: string
+              nullable: true
+            status:
+              type: string
+              enum:
+              - PENDING
+              - APPROVED
+              - REJECTED
+            result:
+              type: string
+              enum:
+              - OK
+              - INCONSISTENT
+              - MISSING_DATA
+              nullable: true
+    GateRequest:
+      type: object
+      required:
+      - orgId
+      - op
+      properties:
+        orgId:
+          type: string
+        op:
+          type: string
+          enum:
+          - ALIMENTACAO
+          - MEDICAMENTO
+          - TRANSFERENCIA
+          - NF_VENDA
+    GateResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+    StageChangeRequest:
+      type: object
+      required:
+      - orgId
+      - cycleId
+      - fromStage
+      - toStage
+      - evidences
+      properties:
+        orgId:
+          type: string
+        cycleId:
+          type: string
+        fromStage:
+          type: string
+          enum:
+          - NASCIMENTO
+          - BEZERRO
+          - DESMAMA
+          - RECRIA
+          - ENGORDA
+          - PRONTO_VENDA
+          - VENDIDO
+          - BAIXADO
+        toStage:
+          type: string
+          enum:
+          - NASCIMENTO
+          - BEZERRO
+          - DESMAMA
+          - RECRIA
+          - ENGORDA
+          - PRONTO_VENDA
+          - VENDIDO
+          - BAIXADO
+        evidences:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+        override:
+          type: boolean
+          description: Excecao controlada (requer aprovacoes).
+        approvals:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+              role:
+                type: string
+    StageChangeResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        evidenceScore:
+          type: number
+paths:
+  /health:
+    get:
+      tags:
+      - Saude
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /mothers:
+    post:
+      tags:
+      - Matrizes
+      summary: Criar matriz (mae) com codigo curto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMotherRequest'
+      responses:
+        '200':
+          description: Matriz criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mother'
+  /birth/register:
+    post:
+      tags:
+      - Nascimento
+      summary: Registrar nascimento e gerar extensoes do filho
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterBirthRequest'
+      responses:
+        '200':
+          description: Nascimento registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterBirthResponse'
+  /cycles/open:
+    post:
+      tags:
+      - Ciclos
+      summary: Abrir ciclo operacional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenCycleRequest'
+      responses:
+        '200':
+          description: Ciclo aberto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cycle'
+  /cycles/{cycleId}/inventory/complete:
+    post:
+      tags:
+      - Ciclos
+      summary: Marcar inventario do ciclo como concluido
+      parameters:
+      - in: path
+        name: cycleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - orgId
+              properties:
+                orgId:
+                  type: string
+      responses:
+        '200':
+          description: Inventario concluido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cycle'
+  /cycles/{cycleId}/close:
+    post:
+      tags:
+      - Ciclos
+      summary: Solicitar fechamento do ciclo e iniciar conferencia
+      parameters:
+      - in: path
+        name: cycleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - orgId
+              properties:
+                orgId:
+                  type: string
+      responses:
+        '200':
+          description: Ciclo em conferencia pendente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cycle:
+                    $ref: '#/components/schemas/Cycle'
+                  conferenceId:
+                    type: string
+  /cycles/{cycleId}/conference/review:
+    post:
+      tags:
+      - Conferencia
+      summary: Executar conferencia automatica do ciclo
+      parameters:
+      - in: path
+        name: cycleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - orgId
+              properties:
+                orgId:
+                  type: string
+      responses:
+        '200':
+          description: Resultado da conferencia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum:
+                    - OK
+                    - INCONSISTENT
+                    - MISSING_DATA
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        message:
+                          type: string
+                        refs:
+                          type: array
+                          items:
+                            type: string
+  /cycles/{cycleId}/conference/approve:
+    post:
+      tags:
+      - Conferencia
+      summary: Aprovar conferencia e fechar ciclo
+      parameters:
+      - in: path
+        name: cycleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - orgId
+              properties:
+                orgId:
+                  type: string
+      responses:
+        '200':
+          description: Ciclo fechado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cycle'
+  /lotes/{loteId}/gate:
+    post:
+      tags:
+      - Operacoes
+      summary: Validar se uma operacao critica esta liberada para o lote
+      parameters:
+      - in: path
+        name: loteId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateRequest'
+      responses:
+        '200':
+          description: Resultado do gate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateResponse'
+  /animals/{animalId}/stage-change:
+    post:
+      tags:
+      - Animais
+      summary: Solicitar mudanca de estagio do animal (liberacao condicionada por
+        ciclo e evidencias)
+      parameters:
+      - in: path
+        name: animalId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageChangeRequest'
+      responses:
+        '200':
+          description: Resultado da mudanca de estagio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageChangeResponse'
+  /insumos:
+    post:
+      summary: Criar/atualizar insumo
+      responses:
+        '200':
+          description: OK
+  /warehouses:
+    post:
+      summary: Criar/atualizar armazém
+      responses:
+        '200':
+          description: OK
+  /estoque/{warehouseId}/{skuId}:
+    get:
+      summary: Consultar estoque
+      responses:
+        '200':
+          description: OK
+  /nf-entrada/produtos:
+    post:
+      summary: Criar NF entrada produtos
+      responses:
+        '200':
+          description: OK
+  /nf-entrada/animais:
+    post:
+      summary: Criar NF entrada animais
+      responses:
+        '200':
+          description: OK
+  /consumo/alimentacao:
+    post:
+      summary: Consumir alimentação
+      responses:
+        '200':
+          description: OK
+        '423':
+          description: Bloqueado
+  /consumo/medicamentos:
+    post:
+      summary: Consumir medicamentos
+      responses:
+        '200':
+          description: OK
+        '423':
+          description: Bloqueado

@@ -1,0 +1,309 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
+import {
+  mockPropertyData,
+  mockProductionProjects,
+  mockAnimalDetails,
+} from '../constants';
+import { Property, Pasture, ProductionProject, PastureManagementHistoryItem } from '../types';
+import { Validators, ValidationResult } from '../lib/validators';
+import { db } from '../config/firebase';
+
+const propertyCollection = collection(db, 'properties');
+const pastureCollection = collection(db, 'pastures');
+const projectCollection = collection(db, 'productionProjects');
+
+const DEFAULT_PROPERTY_ID = mockPropertyData.id;
+let seeded = false;
+
+const toProperty = (id: string, raw: Record<string, unknown>): Property => ({
+  ...mockPropertyData,
+  ...raw,
+  id,
+  pastureManagementHistory: (raw.pastureManagementHistory as PastureManagementHistoryItem[]) ?? [],
+  perimeter: (raw.perimeter as { x: number; y: number }[]) ?? mockPropertyData.perimeter,
+  infrastructure: (raw.infrastructure as Property['infrastructure']) ?? mockPropertyData.infrastructure,
+  machinery: (raw.machinery as Property['machinery']) ?? mockPropertyData.machinery,
+});
+
+const toPasture = (id: string, raw: Record<string, unknown>): Pasture => ({
+  id,
+  name: String(raw.name ?? ''),
+  area: Number(raw.area ?? 0),
+  grassHeight: Number(raw.grassHeight ?? 0),
+  cultivar: String(raw.cultivar ?? ''),
+  estimatedForageProduction: Number(raw.estimatedForageProduction ?? 0),
+  grazingPeriod: {
+    start: String((raw.grazingPeriod as { start?: string })?.start ?? ''),
+    end: String((raw.grazingPeriod as { end?: string })?.end ?? ''),
+  },
+  entryDate: String(raw.entryDate ?? ''),
+  exitDate: String(raw.exitDate ?? ''),
+  stockingRate: String(raw.stockingRate ?? ''),
+  managementRecommendations: (raw.managementRecommendations as string[]) ?? [],
+  managementHistory: (raw.managementHistory as string[]) ?? [],
+  animals: (raw.animals as Pasture['animals']) ?? [],
+  polygon: (raw.polygon as { x: number; y: number }[]) ?? [],
+  center: (raw.center as { x: number; y: number } | undefined) ?? undefined,
+});
+
+const toProject = (id: string, raw: Record<string, unknown>): ProductionProject => ({
+  id,
+  name: String(raw.name ?? ''),
+  type: (raw.type as ProductionProject['type']) ?? 'Agricultura',
+  variety: raw.variety ? String(raw.variety) : undefined,
+  status: (raw.status as ProductionProject['status']) ?? 'PLANEJAMENTO',
+  volume: String(raw.volume ?? ''),
+  prazo: String(raw.prazo ?? ''),
+  precoAlvo: String(raw.precoAlvo ?? ''),
+  aReceber: Number(raw.aReceber ?? 0),
+  aPagar: Number(raw.aPagar ?? 0),
+  limiteVigente: Number(raw.limiteVigente ?? 0),
+  limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
+});
+
+async function ensureSeedData() {
+  if (seeded) {
+    return;
+  }
+
+  const propertySnapshot = await getDoc(doc(db, 'properties', DEFAULT_PROPERTY_ID));
+  if (propertySnapshot.exists()) {
+    seeded = true;
+    return;
+  }
+
+  await setDoc(
+    doc(db, 'properties', DEFAULT_PROPERTY_ID),
+    {
+      ...mockPropertyData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await Promise.all(
+    mockProductionProjects.map((project) =>
+      setDoc(
+        doc(db, 'productionProjects', project.id),
+        {
+          ...project,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    )
+  );
+
+  const seededPastures = Object.values(mockAnimalDetails).flatMap((detail) => detail.pastures);
+  await Promise.all(
+    seededPastures.map((pasture) =>
+      setDoc(
+        doc(db, 'pastures', pasture.id),
+        {
+          ...pasture,
+          propertyId: DEFAULT_PROPERTY_ID,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    )
+  );
+
+  seeded = true;
+}
+
+export const propertyService = {
+  async loadWorkspace(
+    propertyId: string = DEFAULT_PROPERTY_ID
+  ): Promise<{ property: Property; activities: ProductionProject[]; pastures: Pasture[] }> {
+    await ensureSeedData();
+
+    const [propertySnapshot, activitySnapshot, pastureSnapshot] = await Promise.all([
+      getDoc(doc(db, 'properties', propertyId)),
+      getDocs(projectCollection),
+      getDocs(query(pastureCollection, limit(300))),
+    ]);
+
+    const property = propertySnapshot.exists()
+      ? toProperty(propertySnapshot.id, propertySnapshot.data() as Record<string, unknown>)
+      : mockPropertyData;
+
+    const activities = activitySnapshot.docs
+      .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .sort((a: ProductionProject, b: ProductionProject) => a.name.localeCompare(b.name));
+
+    const pastures = pastureSnapshot.docs
+      .map((docSnapshot: any) => toPasture(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .sort((a: Pasture, b: Pasture) => a.name.localeCompare(b.name));
+
+    return {
+      property,
+      activities,
+      pastures,
+    };
+  },
+
+  async searchCAR(carInput: string): Promise<{ success: boolean; data?: unknown; message?: string }> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (carInput && carInput.length > 5) {
+          const sicarData = {
+            protocol: carInput,
+            municipality: 'Sorriso - MT',
+            totalArea: '1.200,00 ha',
+            rl: '240,00 ha (20%)',
+            app: '150,00 ha',
+            status: 'ATIVO',
+            owner: 'Fazenda Boa Esperanca Ltda',
+          };
+          resolve({ success: true, data: sicarData });
+        } else {
+          resolve({ success: false, message: 'CAR nao encontrado. Verifique o numero do recibo.' });
+        }
+      }, 900);
+    });
+  },
+
+  async saveDivision(divisionData: {
+    name: string;
+    points: { lat: string; long: string }[];
+  }): Promise<{ success: boolean; newPasture?: Pasture; message?: string }> {
+    const validation = Validators.division(divisionData);
+    if (!validation.success) {
+      return { success: false, message: validation.error };
+    }
+
+    await ensureSeedData();
+
+    const { name, points } = divisionData;
+    const mockSvgPoints = points.map((pt, i) => ({
+      x: 20 + (Math.abs(parseFloat(pt.long)) % 1) * 60 + i * 5,
+      y: 20 + (Math.abs(parseFloat(pt.lat)) % 1) * 60 + i * 5,
+    }));
+
+    const newPasture: Pasture = {
+      id: `PAST-${Date.now()}`,
+      name,
+      area: Math.floor(Math.random() * (100 - 20 + 1) + 20),
+      grassHeight: 0,
+      cultivar: 'N/A',
+      estimatedForageProduction: 0,
+      grazingPeriod: { start: '', end: '' },
+      entryDate: '',
+      exitDate: '',
+      stockingRate: '0 UA/ha',
+      managementRecommendations: [],
+      managementHistory: [],
+      animals: [],
+      polygon: mockSvgPoints,
+      center: mockSvgPoints[0],
+    };
+
+    await setDoc(
+      doc(db, 'pastures', newPasture.id),
+      {
+        ...newPasture,
+        propertyId: DEFAULT_PROPERTY_ID,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return { success: true, newPasture };
+  },
+
+  async saveActivity(activityData: {
+    sector: ProductionProject['type'];
+    variety: string;
+    name: string;
+    volume: string;
+  }): Promise<{ success: boolean; newProject?: ProductionProject; message?: string }> {
+    const validation = Validators.activity(activityData);
+    if (!validation.success) {
+      return { success: false, message: validation.error };
+    }
+
+    await ensureSeedData();
+
+    const newProject: ProductionProject = {
+      id: `PROJ-${Date.now()}`,
+      name: activityData.name,
+      type: activityData.sector,
+      variety: activityData.variety,
+      status: 'PLANEJAMENTO',
+      volume: activityData.volume,
+      prazo: 'A definir',
+      precoAlvo: 'A definir',
+      aReceber: 0,
+      aPagar: 0,
+      limiteVigente: 0,
+      limiteUtilizado: 0,
+    };
+
+    await setDoc(
+      doc(db, 'productionProjects', newProject.id),
+      {
+        ...newProject,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return { success: true, newProject };
+  },
+
+  async updateProperty(propertyData: Property): Promise<ValidationResult> {
+    const validation = Validators.property(propertyData);
+    if (!validation.success) {
+      return validation;
+    }
+
+    await ensureSeedData();
+    await setDoc(
+      doc(db, 'properties', propertyData.id || DEFAULT_PROPERTY_ID),
+      {
+        ...propertyData,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return validation;
+  },
+
+  async deleteActivity(activityId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      await ensureSeedData();
+      await deleteDoc(doc(db, 'productionProjects', activityId));
+      return { success: true };
+    } catch {
+      return { success: false, message: 'Nao foi possivel remover a atividade.' };
+    }
+  },
+
+  addHistoryItem(property: Property, newItem: Omit<PastureManagementHistoryItem, 'date'>): Property {
+    const today = new Date().toLocaleDateString('pt-BR');
+    const newHistoryEntry: PastureManagementHistoryItem = { ...newItem, date: today };
+    const updatedHistory = [newHistoryEntry, ...property.pastureManagementHistory];
+
+    return {
+      ...property,
+      pastureManagementHistory: updatedHistory,
+    };
+  },
+};

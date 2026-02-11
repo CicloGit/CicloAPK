@@ -1,0 +1,67 @@
+{
+  "stock": {
+    "deposited": [],
+    "withdrawn": [],
+    "applied": [],
+    "transferred": []
+  },
+  "marketplace": {
+    "viewed": [],
+    "reserved": [
+      "fulfilled",
+      "cancelled"
+    ],
+    "cancelled": [],
+    "fulfilled": []
+  },
+  "escrow": {
+    "requested": [
+      "paid",
+      "cancelled"
+    ],
+    "paid": [
+      "released",
+      "hold_for_dispute"
+    ],
+    "hold_for_dispute": [
+      "released",
+      "refunded"
+    ],
+    "released": [],
+    "refunded": []
+  },
+  "contracts": {
+    "draft": [
+      "signed"
+    ],
+    "signed": [
+      "active"
+    ],
+    "active": [
+      "completed",
+      "terminated"
+    ],
+    "completed": [],
+    "terminated": []
+  },
+  "milk_ticket": {
+    "created": [
+      "validated"
+    ],
+    "validated": []
+  },
+  "milk_collection": {
+    "draft": [
+      "ready_for_payment"
+    ],
+    "ready_for_payment": [
+      "paid"
+    ],
+    "paid": []
+  },
+  "assets": {
+    "born": [],
+    "weighed": [],
+    "transferred": []
+  }
+}

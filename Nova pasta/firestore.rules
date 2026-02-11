@@ -1,0 +1,401 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function hasUserDoc() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function hasAnyRole() {
+      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Produtor de Sementes', 'Integradora'];
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || hasAnyRole();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || hasAnyRole();
+      allow delete: if false;
+    }
+
+    match /properties/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /pastures/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /productionProjects/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /inventoryItems/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /stockMovements/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /auditEvents/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /bankAccounts/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /receivables/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /expenses/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /transactions/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /marketplaceListings/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /corporateCards/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /partnerStores/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /logisticsEntries/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /contracts/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /salesOffers/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /employees/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /timeRecords/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /payrollEntries/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /ppeOrders/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /marketTrends/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /reportConsumptions/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /reportCapacity/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /sustainablePractices/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /carbonProjects/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /carbonCredits/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /regionalStats/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /newsItems/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /auctionListings/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /marketSaturation/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /operatorRequests/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /operatorTasks/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /supplierOrders/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /supplierFinancials/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /integratedProducers/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /partnershipOffers/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /integratorMessages/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /financialDetails/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /animalDetails/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /sectorDetails/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /stageDetails/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /projectStages/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /technicianKpis/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /technicianReports/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /seedFields/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /seedLots/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /seedCertifications/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /investorKpis/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /investorProjects/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /managerKpis/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /managerActivities/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /managementAlerts/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /managementHistory/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /marketOpportunities/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /fieldDiaryEntries/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /liveHandlingContext/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /liveHandlingHistory/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /integrationStatus/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /integrationRequests/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /aiAnalyses/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /operationalActions/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /customInputRequests/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /customInputFormulas/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /customInputPastures/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /systemConfigs/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /dataDictionaryEntities/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /operationsTable/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /eventsMatrix/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /liquidationFlows/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /architectureNodes/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /legalContracts/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /legalLicenses/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /legalComplianceAlerts/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

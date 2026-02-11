@@ -1,0 +1,120 @@
+openapi: 3.0.3
+info:
+  title: Ciclo+ API
+  version: "1.0.0"
+  description: |
+    API oficial do Ciclo+.
+    Todos os eventos passam pelo EventOrchestrator (Kernel).
+
+servers:
+  - url: https://api.seudominio.com
+    description: Produção
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    EventRequest:
+      type: object
+      required: [clientRequestId, eventType, subject]
+      properties:
+        clientRequestId:
+          type: string
+        eventType:
+          type: string
+        subject:
+          type: object
+        input:
+          type: object
+        evidenceIds:
+          type: array
+          items:
+            type: string
+
+paths:
+
+  /api/intake:
+    post:
+      summary: Criar Intake (foto/voz/manual)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+      responses:
+        "200":
+          description: Intake criado
+
+  /api/intake/{id}/to-draft:
+    post:
+      summary: Converter Intake para Draft
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Draft gerado
+
+  /api/draft-movements/{id}/execute:
+    post:
+      summary: Executar Draft (passa pelo Kernel)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Movimento executado
+
+  /api/milk/tank-check:
+    post:
+      summary: Conferência diária do tanque (ticket)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+      responses:
+        "200":
+          description: Ticket criado
+
+  /api/marketplace/reserve:
+    post:
+      summary: Reservar insumo (exige escrow)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+      responses:
+        "200":
+          description: Reserva criada
+
+  /api/webhooks/asaas:
+    post:
+      summary: Webhook Asaas (pagamento)
+      responses:
+        "200":
+          description: Webhook processado

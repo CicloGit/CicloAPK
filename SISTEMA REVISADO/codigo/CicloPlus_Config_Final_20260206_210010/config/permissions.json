@@ -1,0 +1,53 @@
+{
+  "roles": {
+    "ADMIN": [
+      "ALL"
+    ],
+    "MANAGER": [
+      "READ_ALL",
+      "WRITE_STOCK",
+      "APPROVE_CONTRACT",
+      "VIEW_AUDIT",
+      "MANAGE_MARKETPLACE",
+      "MANAGE_ESCROW"
+    ],
+    "OPERATOR": [
+      "WRITE_STOCK",
+      "CREATE_INTAKE",
+      "EXECUTE_DRAFT",
+      "VIEW_OWN_EVENTS"
+    ],
+    "PRODUCER": [
+      "CREATE_INTAKE",
+      "VIEW_OWN_STOCK",
+      "VIEW_OWN_CONTRACTS",
+      "CREATE_MILK_TICKET"
+    ],
+    "TECHNICIAN": [
+      "CREATE_INTAKE",
+      "VALIDATE_MILESTONE",
+      "VIEW_AUDIT",
+      "WRITE_FIELD_REPORT"
+    ],
+    "SUPPLIER": [
+      "SYNC_STOCK",
+      "VIEW_MARKETPLACE",
+      "RECEIVE_ESCROW",
+      "VIEW_OWN_SALES"
+    ],
+    "AUDITOR": [
+      "VIEW_AUDIT",
+      "ISSUE_OPINION"
+    ],
+    "LOGISTICS": [
+      "VIEW_ORDERS",
+      "EXECUTE_DELIVERY",
+      "ATTACH_EVIDENCE"
+    ],
+    "INVESTOR": [
+      "VIEW_POOLS",
+      "VIEW_RETURNS",
+      "VIEW_CONTRACTS"
+    ]
+  }
+}

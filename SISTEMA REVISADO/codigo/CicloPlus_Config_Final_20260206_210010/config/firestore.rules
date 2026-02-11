@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function sameTenant(resource) {
+      return isAuthenticated()
+        && resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    function sameTenantInput() {
+      return isAuthenticated()
+        && request.resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    function isAdmin() {
+      return request.auth.token.role == 'ADMIN';
+    }
+
+    function isAuditor() {
+      return request.auth.token.role == 'AUDITOR';
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /audit_events/{eventId} {
+      allow create: if sameTenantInput();
+      allow read: if sameTenant(resource);
+      allow update, delete: if false;
+    }
+
+    match /stock_moves/{moveId} {
+      allow create: if sameTenantInput();
+      allow read: if sameTenant(resource);
+      allow update, delete: if false;
+    }
+
+    match /stock_balance/{itemId} {
+      allow read: if sameTenant(resource);
+      allow write: if sameTenantInput();
+    }
+
+    match /intakes/{id} {
+      allow create: if sameTenantInput();
+      allow read: if sameTenant(resource);
+      allow update: if sameTenant(resource);
+      allow delete: if isAdmin();
+    }
+
+    match /draft_movements/{id} {
+      allow read: if sameTenant(resource);
+      allow write: if sameTenantInput();
+    }
+
+    match /locks/{lockId} {
+      allow read: if sameTenant(resource);
+      allow create: if isAdmin() || isAuditor();
+      allow update, delete: if isAdmin();
+    }
+
+    match /escrow/{escrowId} {
+      allow read: if sameTenant(resource);
+      allow create: if sameTenantInput();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /milk_tickets/{ticketId} {
+      allow read: if sameTenant(resource);
+      allow create: if sameTenantInput();
+      allow update, delete: if false;
+    }
+
+    match /milk_collections/{collectionId} {
+      allow read: if sameTenant(resource);
+      allow write: if sameTenantInput();
+    }
+
+    match /assets/{assetId} {
+      allow read: if sameTenant(resource);
+      allow write: if sameTenantInput();
+    }
+
+    match /marketplace_orders/{orderId} {
+      allow read: if sameTenant(resource);
+      allow create: if sameTenantInput();
+      allow update: if isAdmin();
+    }
+  }
+}

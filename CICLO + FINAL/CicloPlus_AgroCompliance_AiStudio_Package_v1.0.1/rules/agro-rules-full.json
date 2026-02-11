@@ -1,0 +1,630 @@
+{
+  "version": "1.0.1",
+  "description": "Regras completas do módulo Agro: travas por divergência, conferência de ciclo, evidências por mudança de estágio e emissão de NF. + insumos e Nota Fiscal de entrada",
+  "rules": [
+    {
+      "ruleId": "LOCK_OPS_IF_LOTE_DIVERGENTE",
+      "appliesTo": null,
+      "when": {
+        "op": "any",
+        "conditions": [
+          {
+            "op": "gte",
+            "path": "$.lote.missingHeads",
+            "value": 1
+          },
+          {
+            "op": "eq",
+            "path": "$.lote.status",
+            "value": "DIVERGENTE"
+          },
+          {
+            "op": "eq",
+            "path": "$.lote.status",
+            "value": "BLOQUEADO"
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "lock",
+          "resource": "ALIMENTACAO",
+          "reason": "DIVERGENCIA_LOTE",
+          "message": "Lote divergente: alimentação bloqueada até reconciliação."
+        },
+        {
+          "action": "lock",
+          "resource": "MEDICAMENTO",
+          "reason": "DIVERGENCIA_LOTE",
+          "message": "Lote divergente: medicamentos bloqueados até reconciliação."
+        },
+        {
+          "action": "lock",
+          "resource": "TRANSFERENCIA",
+          "reason": "DIVERGENCIA_LOTE",
+          "message": "Lote divergente: transferência bloqueada até reconciliação."
+        },
+        {
+          "action": "lock",
+          "resource": "NF_VENDA",
+          "reason": "DIVERGENCIA_LOTE",
+          "message": "Lote divergente: emissão de Nota Fiscal bloqueada até reconciliação."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_CHANGE_BASE_GATE",
+      "appliesTo": "STAGE_CHANGE",
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "eq",
+            "path": "$.cycle.status",
+            "value": "CLOSED"
+          },
+          {
+            "op": "eq",
+            "path": "$.cycle.conference.status",
+            "value": "APPROVED"
+          },
+          {
+            "op": "eq",
+            "path": "$.lote.status",
+            "value": "CONFORME"
+          },
+          {
+            "op": "eq",
+            "path": "$.lote.missingHeads",
+            "value": 0
+          },
+          {
+            "op": "eq",
+            "path": "$.animal.status",
+            "value": "ATIVO"
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "CICLO_NAO_CONFERIDO_OU_LOTE_DIVERGENTE",
+          "message": "Mudança de estágio liberada somente após conferência aprovada do ciclo e lote conforme."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_NASC_TO_BEZERRO_EVIDENCE_MIN",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "NASCIMENTO",
+        "toStage": "BEZERRO"
+      },
+      "when": {
+        "op": "gte",
+        "path": "$.evidenceScore",
+        "value": 30
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_NASCIMENTO",
+          "message": "NASCIMENTO -> BEZERRO exige evidência mínima (pontuação >= 30)."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_BEZERRO_TO_DESMAMA_EVIDENCE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "BEZERRO",
+        "toStage": "DESMAMA"
+      },
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "BALANCA"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "RFID"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "GPS"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 70
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_DESMAMA",
+          "message": "BEZERRO -> DESMAMA exige BALANÇA + RFID + GPS e pontuação >= 70."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_DESMAMA_TO_RECRIA_EVIDENCE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "DESMAMA",
+        "toStage": "RECRIA"
+      },
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "RFID"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "GPS"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 70
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_RECRIA",
+          "message": "DESMAMA -> RECRIA exige RFID + GPS e pontuação >= 70 (ou exceção 4-olhos)."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_CHANGE_EXCEPTION_4_EYES",
+      "appliesTo": "STAGE_CHANGE",
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "eq",
+            "path": "$.request.override",
+            "value": true
+          },
+          {
+            "op": "gte",
+            "path": "$.request.approvalsCount",
+            "value": 2
+          },
+          {
+            "op": "contains",
+            "path": "$.request.approvalsRoles",
+            "value": "GESTOR"
+          },
+          {
+            "op": "contains",
+            "path": "$.request.approvalsRoles",
+            "value": "AUDITOR"
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        },
+        {
+          "action": "audit",
+          "event": "STAGE_CHANGE_OVERRIDE",
+          "level": "HIGH"
+        }
+      ],
+      "else": []
+    },
+    {
+      "ruleId": "STAGE_RECRIA_TO_ENGORDA_EVIDENCE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "RECRIA",
+        "toStage": "ENGORDA"
+      },
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "BALANCA"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "RFID"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "GPS"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 70
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_ENGORDA",
+          "message": "RECRIA -> ENGORDA exige BALANÇA + RFID + GPS e pontuação >= 70."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_ENGORDA_TO_PRONTO_VENDA_GATE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "ENGORDA",
+        "toStage": "PRONTO_VENDA"
+      },
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "eq",
+            "path": "$.cycle.inventory.completed",
+            "value": true
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "RFID"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "BALANCA"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "GPS"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "CAMERA"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 90
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "INVENTARIO_OU_EVIDENCIA_INSUFICIENTE_PRONTO_VENDA",
+          "message": "ENGORDA -> PRONTO_VENDA exige inventário do ciclo concluído e evidências fortes (RFID+BALANÇA+GPS+CÂMERA, score>=90)."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_PRONTO_VENDA_TO_VENDIDO_EVIDENCE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "fromStage": "PRONTO_VENDA",
+        "toStage": "VENDIDO"
+      },
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "RFID"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "GPS"
+          },
+          {
+            "op": "contains",
+            "path": "$.evidence.types",
+            "value": "CAMERA"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 70
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_VENDA",
+          "message": "PRONTO_VENDA -> VENDIDO exige RFID + GPS + CÂMERA e pontuação >= 70."
+        }
+      ]
+    },
+    {
+      "ruleId": "STAGE_ANY_TO_BAIXADO_EVIDENCE",
+      "appliesTo": "STAGE_CHANGE",
+      "scope": {
+        "toStage": "BAIXADO"
+      },
+      "when": {
+        "op": "any",
+        "conditions": [
+          {
+            "op": "all",
+            "conditions": [
+              {
+                "op": "contains",
+                "path": "$.evidence.types",
+                "value": "CAMERA"
+              },
+              {
+                "op": "contains",
+                "path": "$.evidence.types",
+                "value": "GPS"
+              },
+              {
+                "op": "contains",
+                "path": "$.evidence.types",
+                "value": "DOCUMENTO"
+              },
+              {
+                "op": "gte",
+                "path": "$.evidenceScore",
+                "value": 40
+              }
+            ]
+          },
+          {
+            "op": "eq",
+            "path": "$.request.override",
+            "value": true
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "STAGE_CHANGE"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "STAGE_CHANGE",
+          "reason": "EVIDENCIA_INSUFICIENTE_BAIXA",
+          "message": "Para BAIXADO: exige CÂMERA + GPS + DOCUMENTO (ou exceção 4-olhos)."
+        }
+      ]
+    },
+    {
+      "ruleId": "NF_BLOCK_IF_LOTE_NOT_CONFORME",
+      "appliesTo": "NF_VENDA",
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "eq",
+            "path": "$.lote.status",
+            "value": "CONFORME"
+          },
+          {
+            "op": "eq",
+            "path": "$.lote.missingHeads",
+            "value": 0
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "NF_VENDA"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "NF_VENDA",
+          "reason": "DIVERGENCIA_LOTE_TRAVA_NF",
+          "message": "Emissão de Nota Fiscal bloqueada: lote divergente."
+        }
+      ]
+    },
+    {
+      "ruleId": "NF_ENTRADA_PRODUTOS_FECHAR_REQUIRES_CONFERIDA",
+      "appliesTo": "NF_ENTRADA_PRODUTOS_FECHAR",
+      "when": {
+        "op": "eq",
+        "path": "$.nf.status",
+        "value": "CONFERIDA"
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "NF_ENTRADA_PRODUTOS_FECHAR"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "NF_ENTRADA_PRODUTOS_FECHAR",
+          "reason": "NOTA_FISCAL_DE_ENTRADA_NAO_CONFERIDA",
+          "message": "Fechamento bloqueado: Nota Fiscal de entrada de produtos precisa estar conferida."
+        }
+      ]
+    },
+    {
+      "ruleId": "NF_ENTRADA_ANIMAIS_FECHAR_REQUIRES_CONFERIDA_AND_MATCH_OR_OVERRIDE",
+      "appliesTo": "NF_ENTRADA_ANIMAIS_FECHAR",
+      "when": {
+        "op": "any",
+        "conditions": [
+          {
+            "op": "all",
+            "conditions": [
+              {
+                "op": "eq",
+                "path": "$.nf.status",
+                "value": "CONFERIDA"
+              },
+              {
+                "op": "eq",
+                "path": "$.nf.quantidadeAnimaisConferidaIgualNota",
+                "value": true
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "conditions": [
+              {
+                "op": "eq",
+                "path": "$.request.override",
+                "value": true
+              },
+              {
+                "op": "gte",
+                "path": "$.request.approvalsCount",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "NF_ENTRADA_ANIMAIS_FECHAR"
+        },
+        {
+          "action": "audit",
+          "event": "BASELINE_DO_LOTE_ATUALIZADO_POR_COMPRA_DE_ANIMAIS",
+          "level": "HIGH"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "NF_ENTRADA_ANIMAIS_FECHAR",
+          "reason": "NOTA_FISCAL_DE_ANIMAIS_NAO_CONFERIDA_OU_DIVERGENTE",
+          "message": "Fechamento bloqueado: exige Nota Fiscal conferida e igualdade entre quantidade conferida e quantidade da Nota Fiscal, ou exceção quatro-olhos."
+        }
+      ]
+    },
+    {
+      "ruleId": "AJUSTE_ESTOQUE_REQUIRES_QUATRO_OLHOS_E_EVIDENCIA",
+      "appliesTo": "AJUSTE_ESTOQUE",
+      "when": {
+        "op": "all",
+        "conditions": [
+          {
+            "op": "gte",
+            "path": "$.request.approvalsCount",
+            "value": 2
+          },
+          {
+            "op": "contains",
+            "path": "$.request.approvalsRoles",
+            "value": "GESTOR"
+          },
+          {
+            "op": "contains",
+            "path": "$.request.approvalsRoles",
+            "value": "AUDITOR"
+          },
+          {
+            "op": "gte",
+            "path": "$.evidenceScore",
+            "value": 40
+          }
+        ]
+      },
+      "then": [
+        {
+          "action": "allow",
+          "resource": "AJUSTE_ESTOQUE"
+        },
+        {
+          "action": "audit",
+          "event": "AJUSTE_DE_ESTOQUE_COM_APROVACAO_QUATRO_OLHOS",
+          "level": "HIGH"
+        }
+      ],
+      "else": [
+        {
+          "action": "block",
+          "resource": "AJUSTE_ESTOQUE",
+          "reason": "AJUSTE_BLOQUEADO",
+          "message": "Ajuste de estoque bloqueado: exige aprovação quatro-olhos e evidências."
+        }
+      ]
+    }
+  ]
+}

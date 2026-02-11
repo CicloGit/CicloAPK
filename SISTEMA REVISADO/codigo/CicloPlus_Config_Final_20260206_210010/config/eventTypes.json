@@ -1,0 +1,230 @@
+{
+  "STOCK_DEPOSIT": {
+    "domain": "stock",
+    "riskLevel": "LOW",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "TENANT_ISOLATION",
+      "IDENTITY_REQUIRED",
+      "TRACEABILITY_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "STOCK_WITHDRAW": {
+    "domain": "stock",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "TENANT_ISOLATION",
+      "STOCK_LIMITS"
+    ],
+    "possibleLocks": [
+      "CAR_BLOCK",
+      "IE_BLOCK"
+    ],
+    "auditable": true
+  },
+  "STOCK_APPLY": {
+    "domain": "stock",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "STOCK_LIMITS",
+      "ENV_LIMITS"
+    ],
+    "possibleLocks": [
+      "ENV_LIMIT",
+      "THIRD_PARTY_CUSTODY"
+    ],
+    "auditable": true
+  },
+  "STOCK_TRANSFER": {
+    "domain": "stock",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "TENANT_ISOLATION",
+      "TRACEABILITY_REQUIRED"
+    ],
+    "possibleLocks": [
+      "THIRD_PARTY_CUSTODY"
+    ],
+    "auditable": true
+  },
+  "MARKETPLACE_VIEW": {
+    "domain": "marketplace",
+    "riskLevel": "LOW",
+    "requiredEvidence": null,
+    "rulesets": [
+      "B2C_ACCESS_CONTROL"
+    ],
+    "possibleLocks": [],
+    "auditable": false
+  },
+  "MARKETPLACE_RESERVE": {
+    "domain": "marketplace",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "ESCROW_BEFORE_RESERVE",
+      "GEO_RADIUS_EXPAND"
+    ],
+    "possibleLocks": [
+      "NON_PAYMENT"
+    ],
+    "auditable": true
+  },
+  "MARKETPLACE_CANCEL": {
+    "domain": "marketplace",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": null,
+    "rulesets": [
+      "CANCEL_FEE"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "MARKETPLACE_FULFILL": {
+    "domain": "marketplace",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "ESCROW_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "PDV_SALE": {
+    "domain": "pdv",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "SUPPLIER_SPLIT_BY_IDENTITY",
+      "TRACEABILITY_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "ESCROW_REQUEST": {
+    "domain": "finance",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": null,
+    "rulesets": [
+      "ESCROW_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "ESCROW_PAID": {
+    "domain": "finance",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "WEBHOOK",
+    "rulesets": [],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "ESCROW_RELEASE": {
+    "domain": "finance",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "MILESTONE_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "CONTRACT_CREATE": {
+    "domain": "contracts",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": null,
+    "rulesets": [
+      "TEMPLATE_OR_AI_CONTRACT"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "CONTRACT_SIGN": {
+    "domain": "contracts",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "DIGITAL_SIGNATURE",
+    "rulesets": [
+      "DIGITAL_SIGNATURE_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "CONTRACT_MILESTONE_VALIDATE": {
+    "domain": "contracts",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "EVIDENCE_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "MILK_TANK_CHECK": {
+    "domain": "milk",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "MEMBERSHIP_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "MILK_COLLECTION_BUILD": {
+    "domain": "milk",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": "TYPE_A",
+    "rulesets": [
+      "STATE_MACHINE"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "MILK_PRICE": {
+    "domain": "milk",
+    "riskLevel": "MEDIUM",
+    "requiredEvidence": null,
+    "rulesets": [
+      "PRICING_FORMULA"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "MILK_ESCROW_PAY": {
+    "domain": "milk",
+    "riskLevel": "HIGH",
+    "requiredEvidence": null,
+    "rulesets": [
+      "ESCROW_SPLIT"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "ASSET_BIRTH": {
+    "domain": "assets",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "CHILD_FOLLOWS_MOTHER",
+      "IDENTITY_REQUIRED"
+    ],
+    "possibleLocks": [],
+    "auditable": true
+  },
+  "ASSET_TRANSFER": {
+    "domain": "assets",
+    "riskLevel": "HIGH",
+    "requiredEvidence": "TYPE_B",
+    "rulesets": [
+      "IDENTITY_REQUIRED"
+    ],
+    "possibleLocks": [
+      "THIRD_PARTY_CUSTODY"
+    ],
+    "auditable": true
+  }
+}
