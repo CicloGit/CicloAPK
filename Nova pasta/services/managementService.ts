@@ -7,6 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { mockManagementAlerts, mockManagementHistory } from '../constants';
 import { db } from '../config/firebase';
@@ -76,6 +77,7 @@ export const managementService = {
     await ensureSeedData();
     const snapshot = await getDocs(alertsCollection);
     return snapshot.docs
+      .filter((docSnapshot: any) => !(docSnapshot.data() as Record<string, unknown>).resolved)
       .map((docSnapshot: any) => toAlert(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
@@ -105,5 +107,13 @@ export const managementService = {
     });
 
     return newRecord;
+  },
+
+  async resolveAlert(alertId: string): Promise<void> {
+    await ensureSeedData();
+    await updateDoc(doc(db, 'managementAlerts', alertId), {
+      resolved: true,
+      updatedAt: serverTimestamp(),
+    });
   },
 };

@@ -40,6 +40,18 @@ const WorkforceView: React.FC = () => {
         addToast({ type: 'success', title: 'Regras Atualizadas', message: 'Novos horarios de turno sincronizados com o app dos operadores.' });
     };
 
+    const handlePayEntry = async (entryId: string) => {
+        const previous = payroll;
+        setPayroll((prev) => prev.map((item) => (item.id === entryId ? { ...item, status: 'Pago' } : item)));
+        try {
+            await workforceService.updatePayrollStatus(entryId, 'Pago');
+            addToast({ type: 'success', title: 'Pagamento registrado', message: 'Status da folha atualizado no Firebase.' });
+        } catch {
+            setPayroll(previous);
+            addToast({ type: 'error', title: 'Falha no pagamento', message: 'Nao foi possivel atualizar o status da folha.' });
+        }
+    };
+
     useEffect(() => {
         const loadWorkforce = async () => {
             setIsLoading(true);
@@ -316,7 +328,14 @@ const WorkforceView: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="p-3 text-right">
-                                            {pay.status === 'Pendente' && <button className="text-indigo-600 font-bold hover:underline">Pagar</button>}
+                                            {pay.status === 'Pendente' && (
+                                                <button
+                                                    onClick={() => handlePayEntry(pay.id)}
+                                                    className="text-indigo-600 font-bold hover:underline"
+                                                >
+                                                    Pagar
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

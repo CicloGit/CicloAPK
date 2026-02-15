@@ -22,7 +22,7 @@ const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void
     return (
         <div className={`flex items-center justify-between p-3 mb-2 rounded-md border-l-4 shadow-sm bg-white ${severityColors[alert.severity]} transition-all hover:shadow-md`}>
             <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase opacity-80">{alert.type === 'Nutrition' ? 'Nutricao' : alert.type === 'Health' ? 'Sanidade' : 'Agricultura'} • {alert.dueDate}</span>
+                <span className="text-xs font-bold uppercase opacity-80">{alert.type === 'Nutrition' ? 'Nutricao' : alert.type === 'Health' ? 'Sanidade' : 'Agricultura'} - {alert.dueDate}</span>
                 <span className="font-bold text-sm md:text-base">{alert.message}</span>
                 <span className="text-xs mt-0.5">Local: {alert.target}</span>
             </div>
@@ -120,6 +120,11 @@ const ManagementView: React.FC = () => {
                 quantity: form.quantity,
                 executor: "Eu",
             });
+            const relatedAlert = alerts.find((alert) => alert.target === form.target);
+            if (relatedAlert) {
+                await managementService.resolveAlert(relatedAlert.id);
+                setAlerts((prev) => prev.filter((alert) => alert.id !== relatedAlert.id));
+            }
             setHistory((prev) => [newRecord, ...prev]);
             setForm({ target: "", product: "", quantity: "" });
             addToast({ type: "success", title: "Manejo registrado", message: "A operacao foi salva com sucesso." });
@@ -258,7 +263,7 @@ const ManagementView: React.FC = () => {
                                     }`}></div>
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">{record.actionType} <span className="font-normal text-slate-500">em</span> {record.target}</p>
-                                        <p className="text-xs text-slate-500">{record.product} • {record.quantity}</p>
+                                        <p className="text-xs text-slate-500">{record.product} - {record.quantity}</p>
                                     </div>
                                 </div>
                                 <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">{record.date}</span>

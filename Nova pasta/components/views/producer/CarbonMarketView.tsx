@@ -5,8 +5,10 @@ import LockClosedIcon from '../../icons/LockClosedIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { carbonService } from '../../../services/carbonService';
 import { CarbonCredit, CarbonProject, SustainablePractice } from '../../../types';
+import { useToast } from '../../../contexts/ToastContext';
 
 const CarbonMarketView: React.FC = () => {
+    const { addToast } = useToast();
     const [projects, setProjects] = useState<CarbonProject[]>([]);
     const [credits, setCredits] = useState<CarbonCredit[]>([]);
     const [practices, setPractices] = useState<SustainablePractice[]>([]);
@@ -52,9 +54,18 @@ const CarbonMarketView: React.FC = () => {
         }, {});
     }, [practices]);
 
-    const handleCertify = (projectId: string) => {
-        alert(`Solicitacao de certificacao para o projeto ${projectId} enviada. Uma empresa verificadora parceira entrara em contato.`);
+    const handleCertify = async (projectId: string) => {
+        const previousStatus = projects.find((project) => project.id === projectId)?.status;
         setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: 'EM_VERIFICACAO' } : p));
+        try {
+            await carbonService.updateProjectStatus(projectId, 'EM_VERIFICACAO');
+            addToast({ type: 'success', title: 'Certificacao solicitada', message: 'Status do projeto atualizado no Firebase.' });
+        } catch {
+            if (previousStatus) {
+                setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: previousStatus } : p));
+            }
+            addToast({ type: 'error', title: 'Falha ao solicitar', message: 'Nao foi possivel atualizar a certificacao.' });
+        }
     };
 
     if (isLoading) {

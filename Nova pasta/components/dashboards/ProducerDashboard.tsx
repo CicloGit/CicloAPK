@@ -18,6 +18,7 @@ import SkeletonLoader from '../shared/SkeletonLoader';
 import { propertyService } from '../../services/propertyService';
 import { producerDashboardService } from '../../services/producerDashboardService';
 import { operatorService } from '../../services/operatorService';
+import { useToast } from '../../contexts/ToastContext';
 
 const ProjectIcon: React.FC<{ className?: string }> = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" className={className || "h-6 w-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const CloudIcon: React.FC<{ className?: string }> = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" className={className || "h-6 w-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>;
@@ -48,6 +49,7 @@ const DashboardSkeleton: React.FC = () => (
 );
 
 const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductionId, setSelectedProductionId, setCurrentAction }) => {
+    const { addToast } = useToast();
     const navigate = useNavigate();
     const [viewMode, setViewMode] = useState<'Cards' | 'Map'>('Cards');
     const [selectedStageId, setSelectedStageId] = useState<string>('');
@@ -99,6 +101,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
         void loadDashboard();
     }, []);
 
+    useEffect(() => {
+        setSelectedStageId('');
+    }, [selectedProductionId]);
+
     const isConsolidatedView = selectedProductionId === 'ALL';
     const selectedProduction = !isConsolidatedView ? activities.find(p => p.id === selectedProductionId) : null;
     const aggregatedFinancials = isConsolidatedView
@@ -122,7 +128,19 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
     const sectorConfig = selectedProduction ? getSectorConfig(selectedProduction.type) : null;
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-    const handleRequestDecision = (id: string, decision: 'APPROVED' | 'REJECTED') => setRequests(prev => prev.map(r => r.id === id ? { ...r, status: decision } : r));
+    const handleRequestDecision = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
+        const previousStatus = requests.find((item) => item.id === id)?.status;
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, status: decision } : r));
+        try {
+            await operatorService.updateRequestStatus(id, decision);
+            addToast({ type: 'success', title: 'Solicitacao atualizada', message: 'Status persistido no Firebase.' });
+        } catch {
+            if (previousStatus) {
+                setRequests(prev => prev.map(r => r.id === id ? { ...r, status: previousStatus } : r));
+            }
+            addToast({ type: 'error', title: 'Falha ao atualizar', message: 'Nao foi possivel persistir a solicitacao.' });
+        }
+    };
     const pendingRequests = requests.filter(r => r.status === 'PENDING');
 
     if (isLoading) {

@@ -10,8 +10,10 @@ import ShoppingCartIcon from '../../icons/ShoppingCartIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { operatorService } from '../../../services/operatorService';
 import { fieldOperationsService, FieldDiaryEntry } from '../../../services/fieldOperationsService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const FieldOperationsView: React.FC = () => {
+    const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState<'VALIDATION' | 'REQUESTS' | 'DIARY'>('VALIDATION');
     const [tasks, setTasks] = useState<OperatorTask[]>([]);
     const [requests, setRequests] = useState<OperatorRequest[]>([]);
@@ -47,21 +49,31 @@ const FieldOperationsView: React.FC = () => {
 
     const handleTaskAction = async (taskId: string, action: 'APPROVE' | 'REJECT') => {
         const status = action === 'APPROVE' ? 'COMPLETED' : 'REJECTED';
+        const previousStatus = tasks.find((task) => task.id === taskId)?.status;
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
         try {
             await operatorService.updateTaskStatus(taskId, status);
+            addToast({ type: 'success', title: 'Tarefa atualizada', message: 'Status salvo no Firebase.' });
         } catch {
-            setLoadError('Nao foi possivel atualizar a tarefa.');
+            if (previousStatus) {
+                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: previousStatus } : t));
+            }
+            addToast({ type: 'error', title: 'Falha ao atualizar', message: 'Nao foi possivel salvar a tarefa.' });
         }
     };
 
     const handleRequestAction = async (reqId: string, action: 'APPROVE' | 'REJECT') => {
         const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        const previousStatus = requests.find((request) => request.id === reqId)?.status;
         setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status } : r));
         try {
             await operatorService.updateRequestStatus(reqId, status);
+            addToast({ type: 'success', title: 'Solicitacao atualizada', message: 'Status salvo no Firebase.' });
         } catch {
-            setLoadError('Nao foi possivel atualizar a solicitacao.');
+            if (previousStatus) {
+                setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: previousStatus } : r));
+            }
+            addToast({ type: 'error', title: 'Falha ao atualizar', message: 'Nao foi possivel salvar a solicitacao.' });
         }
     };
 
@@ -183,7 +195,7 @@ const FieldOperationsView: React.FC = () => {
                                 <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center opacity-75 hover:opacity-100 transition-opacity">
                                     <div>
                                         <p className="font-bold text-slate-700">{task.title}</p>
-                                        <p className="text-xs text-slate-500">{task.executor} • {task.timestamp}</p>
+                                        <p className="text-xs text-slate-500">{task.executor} â€¢ {task.timestamp}</p>
                                     </div>
                                     <span className="text-emerald-600">
                                         <CheckCircleIcon className="h-6 w-6" />
@@ -271,7 +283,7 @@ const FieldOperationsView: React.FC = () => {
                                     </div>
                                     <div>
                                         <p className="font-bold text-slate-800">{entry.author} ({entry.role})</p>
-                                        <p className="text-xs text-slate-500">{entry.date} • {entry.location}</p>
+                                        <p className="text-xs text-slate-500">{entry.date} â€¢ {entry.location}</p>
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded border border-slate-100">

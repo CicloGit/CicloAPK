@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FlaskIcon from '../../icons/FlaskIcon';
 import CheckCircleIcon from '../../icons/CheckCircleIcon';

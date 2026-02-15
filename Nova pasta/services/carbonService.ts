@@ -6,6 +6,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { mockCarbonCredits, mockCarbonProjects, mockSustainablePractices } from '../constants';
 import { db } from '../config/firebase';
@@ -110,5 +111,13 @@ export const carbonService = {
     return snapshot.docs
       .map((docSnapshot: any) => toCredit(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: CarbonCredit, b: CarbonCredit) => b.vintage - a.vintage);
+  },
+
+  async updateProjectStatus(projectId: string, status: CarbonProject['status']): Promise<void> {
+    await ensureSeedData();
+    await updateDoc(doc(db, 'carbonProjects', projectId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
   },
 };

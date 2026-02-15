@@ -14,6 +14,7 @@ import { ProductionProject } from '../types';
 
 export interface LiveHandlingEntry {
   id: string;
+  projectId: string;
   entityId: string;
   value: string;
   action: string;
@@ -29,6 +30,7 @@ const seedHistory: LiveHandlingEntry[] = [];
 
 const toHistory = (id: string, raw: Record<string, unknown>): LiveHandlingEntry => ({
   id,
+  projectId: String(raw.projectId ?? ''),
   entityId: String(raw.entityId ?? ''),
   value: String(raw.value ?? ''),
   action: String(raw.action ?? ''),
@@ -103,6 +105,7 @@ export const liveHandlingService = {
     await ensureSeedData();
     const newEntry: LiveHandlingEntry = {
       id: `LIVE-${Date.now()}`,
+      projectId: payload.projectId,
       entityId: payload.entityId,
       value: payload.value,
       action: payload.action,

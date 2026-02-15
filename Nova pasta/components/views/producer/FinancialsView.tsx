@@ -6,7 +6,7 @@ import LibraryIcon from '../../icons/LibraryIcon';
 import DigitalAccountView from '../../shared/DigitalAccountView';
 import DocumentReportIcon from '../../icons/DocumentReportIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { financialService } from '../../../services/financialService';
+import { financialService, financialSplitConfig } from '../../../services/financialService';
 import { useApp } from '../../../contexts/AppContext';
 
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -114,7 +114,7 @@ const FinancialsView: React.FC = () => {
     .filter((item) => item.status === 'PENDENTE' || item.status === 'EM_ESCROW')
     .reduce((sum, item) => sum + item.value, 0);
   const realizedRevenue = filteredReceivables.filter((item) => item.status === 'LIQUIDADO').reduce((sum, item) => sum + item.value, 0);
-  const estimatedFees = (realizedRevenue + provisionedRevenue) * 0.015;
+  const estimatedFees = (realizedRevenue + provisionedRevenue) * (financialSplitConfig.platformFeeRate + financialSplitConfig.logisticsRate);
 
   if (isLoading) {
     return <LoadingSpinner text="Carregando financeiro..." />;
@@ -278,7 +278,7 @@ const FinancialsView: React.FC = () => {
                   <h4 className="text-sm font-bold uppercase mb-4">Custos</h4>
                   <div className="space-y-4">
                     <div className="flex justify-between">
-                      <span>Taxas (Estimado)</span>
+                      <span>Taxas + Logistica (Estimado)</span>
                       <span className="font-bold text-red-500">-{formatCurrency(estimatedFees)}</span>
                     </div>
                   </div>

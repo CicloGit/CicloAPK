@@ -4,15 +4,20 @@ import TrendingUpIcon from '../../icons/TrendingUpIcon';
 import LockClosedIcon from '../../icons/LockClosedIcon';
 import CheckCircleIcon from '../../icons/CheckCircleIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { futureMarketService } from '../../../services/futureMarketService';
+import { futureMarketService, FutureLockContract } from '../../../services/futureMarketService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const FutureMarketView: React.FC = () => {
+    const { addToast } = useToast();
     const [selectedOpportunity, setSelectedOpportunity] = useState<MarketOpportunity | null>(null);
     const [lockStep, setLockStep] = useState<'LIST' | 'CONFIRM' | 'SUCCESS'>('LIST');
     const [quantityToLock, setQuantityToLock] = useState('');
     const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
+    const [lockedContract, setLockedContract] = useState<FutureLockContract | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -34,17 +39,47 @@ const FutureMarketView: React.FC = () => {
     }, []);
 
     const handleSelectOpportunity = (opp: MarketOpportunity) => {
+        setSubmitError(null);
         setSelectedOpportunity(opp);
         setLockStep('CONFIRM');
     };
 
-    const handleConfirmLock = () => {
-        setLockStep('SUCCESS');
+    const handleConfirmLock = async () => {
+        if (!selectedOpportunity) {
+            return;
+        }
+
+        const parsedQuantity = Number(quantityToLock);
+        const minimumQuantity = Number.parseFloat(selectedOpportunity.minQuantity);
+        if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+            setSubmitError('Informe uma quantidade valida para travar.');
+            return;
+        }
+
+        if (Number.isFinite(minimumQuantity) && parsedQuantity < minimumQuantity) {
+            setSubmitError(`Quantidade abaixo do minimo (${selectedOpportunity.minQuantity}).`);
+            return;
+        }
+
+        setSubmitError(null);
+        setIsSaving(true);
+        try {
+            const contract = await futureMarketService.createLockContract(selectedOpportunity, parsedQuantity);
+            setLockedContract(contract);
+            setLockStep('SUCCESS');
+            addToast({ type: 'success', title: 'Trava registrada', message: 'Contrato salvo no Firebase.' });
+        } catch {
+            setSubmitError('Nao foi possivel registrar a trava no Firebase.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleClose = () => {
         setLockStep('LIST');
         setSelectedOpportunity(null);
+        setLockedContract(null);
+        setSubmitError(null);
         setQuantityToLock('');
     };
 
@@ -63,13 +98,13 @@ const FutureMarketView: React.FC = () => {
                     <CheckCircleIcon className="h-10 w-10 text-green-600" />
                 </div>
                 <h2 className="text-3xl font-bold text-slate-800 mb-2">Contrato Travado com Sucesso!</h2>
-                <p className="text-slate-600 mb-6 max-w-md">
-                    Voce garantiu a venda de <span className="font-bold text-slate-800">{quantityToLock} {selectedOpportunity?.unit}</span> de {selectedOpportunity?.commodity} para <span className="font-bold text-slate-800">{selectedOpportunity?.buyer}</span>.
+                    <p className="text-slate-600 mb-6 max-w-md">
+                    Voce garantiu a venda de <span className="font-bold text-slate-800">{lockedContract?.quantity ?? quantityToLock} {selectedOpportunity?.unit}</span> de {selectedOpportunity?.commodity} para <span className="font-bold text-slate-800">{selectedOpportunity?.buyer}</span>.
                 </p>
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-8 w-full max-w-md">
                     <p className="text-sm text-slate-500 mb-1">Valor Total Estimado (Travado)</p>
                     <p className="text-2xl font-bold text-emerald-600">
-                        {selectedOpportunity && quantityToLock ? formatCurrency(selectedOpportunity.price * parseFloat(quantityToLock)) : 'R$ 0,00'}
+                        {lockedContract ? formatCurrency(lockedContract.totalValue) : 'R$ 0,00'}
                     </p>
                     <p className="text-xs text-slate-400 mt-2">Um contrato digital foi gerado e o Escrow foi acionado.</p>
                 </div>
@@ -126,10 +161,15 @@ const FutureMarketView: React.FC = () => {
                         <button onClick={() => setLockStep('LIST')} className="flex-1 py-3 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors">
                             Cancelar
                         </button>
-                        <button onClick={handleConfirmLock} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-md">
-                            Confirmar Trava (Lock)
+                        <button
+                            onClick={handleConfirmLock}
+                            disabled={isSaving}
+                            className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-md disabled:opacity-60"
+                        >
+                            {isSaving ? 'Gravando...' : 'Confirmar Trava (Lock)'}
                         </button>
                     </div>
+                    {submitError && <p className="mt-4 text-sm font-semibold text-red-600">{submitError}</p>}
                 </div>
             </div>
         );

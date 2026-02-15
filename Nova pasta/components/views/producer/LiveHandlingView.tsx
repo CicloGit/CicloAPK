@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Animal, AnimalProductionDetails, ProductionProject } from '../../../types';
+import { AnimalProductionDetails, ProductionProject } from '../../../types';
 import QrCodeIcon from '../../icons/QrCodeIcon';
 import CheckCircleIcon from '../../icons/CheckCircleIcon';
-import ExclamationIcon from '../../icons/ExclamationIcon';
 import { getSectorSettings } from '../../../config/sectorUtils';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { liveHandlingService, LiveHandlingEntry } from '../../../services/liveHandlingService';
 import { producerDashboardService } from '../../../services/producerDashboardService';
 import { useToast } from '../../../contexts/ToastContext';
+
+interface ScannedEntity {
+    id: string;
+    category: string;
+    status: string;
+    lastValue: string;
+}
 
 const LiveHandlingView: React.FC = () => {
     const { addToast } = useToast();
@@ -17,7 +23,11 @@ const LiveHandlingView: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
-    const activeProject = projects[0];
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const activeProject = useMemo(
+        () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
+        [projects, selectedProjectId]
+    );
     const sectorSettings = getSectorSettings(activeProject?.type);
 
     const [isConnectedScale, setIsConnectedScale] = useState(false);
@@ -25,7 +35,7 @@ const LiveHandlingView: React.FC = () => {
     
     const [currentId, setCurrentId] = useState('');
     const [currentValue, setCurrentValue] = useState<string>('');
-    const [scannedEntity, setScannedEntity] = useState<any | null>(null);
+    const [scannedEntity, setScannedEntity] = useState<ScannedEntity | null>(null);
 
     useEffect(() => {
         const loadLiveHandling = async () => {
@@ -40,6 +50,7 @@ const LiveHandlingView: React.FC = () => {
                 setProjects(loadedProjects);
                 setHistory(loadedHistory);
                 setAnimalDetailsMap(loadedAnimalDetails);
+                setSelectedProjectId(loadedProjects[0]?.id ?? '');
             } catch {
                 setLoadError('Nao foi possivel carregar o manejo ao vivo.');
             } finally {
@@ -53,7 +64,12 @@ const LiveHandlingView: React.FC = () => {
     useEffect(() => {
         setCurrentId('');
         setCurrentValue('');
-    }, [activeProject?.type]);
+    }, [activeProject?.id, activeProject?.type]);
+
+    const visibleHistory = useMemo(
+        () => history.filter((entry) => !activeProject || entry.projectId === activeProject.id),
+        [history, activeProject]
+    );
 
     const handleScan = () => {
         const baseId = currentId || 'ID-DETECTADO-001';
@@ -78,10 +94,11 @@ const LiveHandlingView: React.FC = () => {
     };
 
     const handleAction = async (action: string) => {
-        if (!currentId || !currentValue) return;
+        if (!activeProject || !currentId || !currentValue) return;
 
         try {
             const newEntry: LiveHandlingEntry = await liveHandlingService.createEntry({
+                projectId: activeProject.id,
                 entityId: currentId,
                 value: `${currentValue} ${sectorSettings.liveHandling.primaryUnit}`,
                 action,
@@ -113,6 +130,19 @@ const LiveHandlingView: React.FC = () => {
                         {sectorSettings.labels.liveHandling}
                     </h2>
                     <p className="text-slate-600">Entrada de dados operacionais em tempo real.</p>
+                    <div className="mt-3">
+                        <select
+                            value={activeProject?.id ?? ''}
+                            onChange={(event) => setSelectedProjectId(event.target.value)}
+                            className="w-full md:w-80 p-2 border border-slate-300 rounded-md bg-white text-sm font-semibold text-slate-700"
+                        >
+                            {projects.map((project) => (
+                                <option key={project.id} value={project.id}>
+                                    {project.name} ({project.type})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 
                 <div className="flex space-x-3 mt-4 md:mt-0">
@@ -211,7 +241,7 @@ const LiveHandlingView: React.FC = () => {
                                     <button 
                                         key={idx}
                                         onClick={() => handleAction(action)}
-                                        disabled={!currentId}
+                                        disabled={!currentId || !activeProject}
                                         className={`p-4 text-white rounded-lg font-bold shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
                                             ${idx === 0 ? 'bg-emerald-500 hover:bg-emerald-600' : 
                                               idx === 1 ? 'bg-blue-500 hover:bg-blue-600' :
@@ -229,12 +259,12 @@ const LiveHandlingView: React.FC = () => {
 
                 <div className="bg-white rounded-xl shadow-md p-6 h-fit">
                     <h3 className="text-xl font-bold text-slate-800 mb-4">Historico da Sessao</h3>
-                    {history.length === 0 ? (
+                    {visibleHistory.length === 0 ? (
                         <p className="text-slate-500 text-sm text-center py-10">Nenhum registro processado ainda.</p>
                     ) : (
                         <div className="overflow-y-auto max-h-[500px]">
                             <ul className="space-y-3">
-                                {history.map((entry, idx) => (
+                                {visibleHistory.map((entry, idx) => (
                                     <li key={idx} className="p-3 bg-slate-50 rounded border border-slate-100 flex justify-between items-center">
                                         <div>
                                             <span className="font-mono font-bold text-slate-800">{entry.entityId}</span>
@@ -250,10 +280,10 @@ const LiveHandlingView: React.FC = () => {
                         </div>
                     )}
                     
-                    {history.length > 0 && (
+                    {visibleHistory.length > 0 && (
                         <div className="mt-6 pt-4 border-t border-slate-100">
                             <div className="flex justify-between text-sm font-bold text-slate-700 mb-2">
-                                <span>Itens: {history.length}</span>
+                                <span>Itens: {visibleHistory.length}</span>
                             </div>
                             <button className="w-full py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 text-sm font-semibold">
                                 Encerrar {sectorSettings.labels.group}

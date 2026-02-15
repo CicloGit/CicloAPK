@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { mockSalesOffers } from '../constants';
 import { db } from '../config/firebase';
+import { parseDateToTimestamp } from './dateUtils';
 import { SalesOffer } from '../types';
 
 const salesOfferCollection = collection(db, 'salesOffers');
@@ -54,7 +55,7 @@ export const salesService = {
     const snapshot = await getDocs(salesOfferCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toSalesOffer(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: SalesOffer, b: SalesOffer) => b.date.localeCompare(a.date));
+      .sort((a: SalesOffer, b: SalesOffer) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
   async createOffer(data: Pick<SalesOffer, 'product' | 'quantity' | 'price'>): Promise<SalesOffer> {
