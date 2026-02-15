@@ -31,8 +31,8 @@ interface ProducerDashboardProps {
 const getSectorConfig = (sector: ProductionSector) => {
     switch (sector) {
         case 'Agricultura': return { icon: '??', quickActions: [{ id: 'registerPlanting', label: 'Registrar Plantio' }, { id: 'sellCrop', label: 'Vender Safra' }], summaryTitle: 'Resumo da Lavoura' };
-        case 'Pecu·ria (Bovinos Corte)': return { icon: '??', quickActions: [{ id: 'registerAnimal', label: 'Registrar Animal' }, { id: 'sellBatch', label: 'Vender Lote' }], summaryTitle: 'Resumo do Rebanho' };
-        default: return { icon: '??', quickActions: [], summaryTitle: 'Resumo da ProduÁ„o' };
+        case 'Pecu√°ria (Bovinos Corte)': return { icon: '??', quickActions: [{ id: 'registerAnimal', label: 'Registrar Animal' }, { id: 'sellBatch', label: 'Vender Lote' }], summaryTitle: 'Resumo do Rebanho' };
+        default: return { icon: '??', quickActions: [], summaryTitle: 'Resumo da Produ√ß√£o' };
     }
 };
 
@@ -117,7 +117,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
         : null;
     const pastures = !isConsolidatedView && selectedProductionId ? (animalDetailsMap[selectedProductionId]?.pastures || []) : [];
     const activeStages = !isConsolidatedView && selectedProductionId ? (projectStagesMap[selectedProductionId] || []).filter(s => s.status === 'ACTIVE') : [];
-    const climateRecommendations = { 'Consolidated': { region: 'Mato Grosso (MÈdio Norte)', period: '15/Out - 20/Out', status: 'FAVOR¡VEL', forecast: 'Previs„o de 45mm de chuva nos prÛximos 5 dias.', action: 'Iniciar plantio da safra principal.' }, 'PROJ-001': { region: 'Sorriso-MT', period: 'Outubro/2024', status: 'IDEAL', forecast: 'Janela de umidade perfeita para germinaÁ„o.', action: 'Acelerar plantio de Soja.' }, 'PROJ-002': { region: 'Sinop-MT', period: 'Novembro/2024', status: 'ATEN«√O', forecast: 'Temperaturas elevadas previstas.', action: 'Garantir disponibilidade de ·gua e sombra.' }, };
+    const climateRecommendations = { 'Consolidated': { region: 'Mato Grosso (M√©dio Norte)', period: '15/Out - 20/Out', status: 'FAVOR√ÅVEL', forecast: 'Previs√£o de 45mm de chuva nos pr√≥ximos 5 dias.', action: 'Iniciar plantio da safra principal.' }, 'PROJ-001': { region: 'Sorriso-MT', period: 'Outubro/2024', status: 'IDEAL', forecast: 'Janela de umidade perfeita para germina√ß√£o.', action: 'Acelerar plantio de Soja.' }, 'PROJ-002': { region: 'Sinop-MT', period: 'Novembro/2024', status: 'ATEN√á√ÉO', forecast: 'Temperaturas elevadas previstas.', action: 'Garantir disponibilidade de √°gua e sombra.' }, };
     const climateData = isConsolidatedView ? climateRecommendations['Consolidated'] : (selectedProductionId && climateRecommendations[selectedProductionId as keyof typeof climateRecommendations]) || null;
     const sectorConfig = selectedProduction ? getSectorConfig(selectedProduction.type) : null;
 
@@ -138,7 +138,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-800 mb-2">Painel do Produtor</h2>
-                    <p className="text-slate-600">Gest„o integrada da operaÁ„o e tomada de decis„o.</p>
+                    <p className="text-slate-600">Gest√£o integrada da opera√ß√£o e tomada de decis√£o.</p>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => navigate('/property-registration')} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-semibold hover:bg-indigo-700 shadow-sm">
@@ -148,7 +148,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                     {(selectedProduction || isConsolidatedView) && (
                         <div className="flex bg-slate-200 rounded p-1">
                             <button onClick={() => setViewMode('Cards')} className={`flex items-center px-4 py-2 rounded-md text-sm font-semibold ${viewMode === 'Cards' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:bg-slate-300'}`}>
-                                <ProjectIcon /> <span className="ml-2 hidden sm:inline">Vis„o Geral</span>
+                                <ProjectIcon /> <span className="ml-2 hidden sm:inline">Vis√£o Geral</span>
                             </button>
                             {!isConsolidatedView && (
                                 <button onClick={() => setViewMode('Map')} className={`flex items-center px-4 py-2 rounded-md text-sm font-semibold ${viewMode === 'Map' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:bg-slate-300'}`}>
@@ -163,18 +163,18 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
             <div className="mb-8 bg-white p-4 rounded-lg shadow-md">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="production-select" className="block text-sm font-medium text-slate-700 mb-2">VisualizaÁ„o da OperaÁ„o</label>
+                        <label htmlFor="production-select" className="block text-sm font-medium text-slate-700 mb-2">Visualiza√ß√£o da Opera√ß√£o</label>
                         <select id="production-select" value={selectedProductionId || ''} onChange={(e) => setSelectedProductionId(e.target.value || null)} className="block w-full p-3 border border-slate-300 rounded-md shadow-sm disabled:bg-slate-100" disabled={isLoading}>
                             <option value="">-- Selecione --</option>
-                            <option value="ALL" className="font-bold text-indigo-700">?? Vis„o Consolidada (Holding)</option>
+                            <option value="ALL" className="font-bold text-indigo-700">?? Vis√£o Consolidada (Holding)</option>
                             <optgroup label="Projetos Individuais">{activities.map(p => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}</optgroup>
                         </select>
                     </div>
                     {!isConsolidatedView && selectedProductionId && activeStages.length > 0 && (
                         <div className="animate-fade-in">
-                            <label htmlFor="stage-select" className="block text-sm font-medium text-slate-700 mb-2">EspÈcie / Est·gio Ativo</label>
+                            <label htmlFor="stage-select" className="block text-sm font-medium text-slate-700 mb-2">Esp√©cie / Est√°gio Ativo</label>
                             <select id="stage-select" value={selectedStageId} onChange={(e) => setSelectedStageId(e.target.value)} className="block w-full p-3 border border-emerald-300 bg-emerald-50 rounded-md disabled:bg-slate-100" disabled={isLoading}>
-                                <option value="">-- Vis„o Geral do Projeto --</option>
+                                <option value="">-- Vis√£o Geral do Projeto --</option>
                                 {activeStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                             </select>
                         </div>
@@ -183,7 +183,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
             </div>
 
             {(!selectedProduction && !isConsolidatedView) ? (
-                <div className="text-center py-16 bg-white rounded-lg shadow-md"><BriefcaseIcon className="mx-auto h-12 w-12 text-slate-400" /><h3 className="mt-2 text-lg font-medium">Selecione uma visualizaÁ„o</h3><p className="mt-1 text-sm text-slate-500">Escolha a vis„o consolidada ou uma fazenda especÌfica.</p></div>
+                <div className="text-center py-16 bg-white rounded-lg shadow-md"><BriefcaseIcon className="mx-auto h-12 w-12 text-slate-400" /><h3 className="mt-2 text-lg font-medium">Selecione uma visualiza√ß√£o</h3><p className="mt-1 text-sm text-slate-500">Escolha a vis√£o consolidada ou uma fazenda espec√≠fica.</p></div>
             ) : (
               <>
                 {climateData && viewMode === 'Cards' && (
@@ -199,7 +199,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                             <div className="bg-white/10 p-4 rounded-lg">
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-xs font-bold uppercase">{climateData.period}</span>
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${climateData.status.includes('FAVOR¡VEL') ? 'bg-green-500' : 'bg-orange-500'}`}>{climateData.status}</span>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${climateData.status.includes('FAVOR√ÅVEL') ? 'bg-green-500' : 'bg-orange-500'}`}>{climateData.status}</span>
                                 </div>
                                 <p className="font-semibold text-sm">{climateData.action}</p>
                             </div>
@@ -210,8 +210,8 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                     <div className="animate-fade-in mb-8">
                         <div className="bg-white p-6 rounded-lg shadow-md">
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-xl font-bold flex items-center"><MapIcon className="h-6 w-6 mr-2 text-emerald-600" />Vis„o AÈrea</h3>
-                                <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">Modo SatÈlite</span>
+                                <h3 className="text-xl font-bold flex items-center"><MapIcon className="h-6 w-6 mr-2 text-emerald-600" />Vis√£o A√©rea</h3>
+                                <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">Modo Sat√©lite</span>
                             </div>
                             <PropertyMapView property={property} pastures={pastures} />
                         </div>
@@ -232,16 +232,16 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                             ) : (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                                     <div className="p-2 bg-slate-50 rounded"><p className="text-xs uppercase font-bold">Status</p><p className="text-lg font-bold">{selectedProduction?.status}</p></div>
-                                    <div className="p-2 bg-slate-50 rounded"><p className="text-xs uppercase font-bold">PreÁo Alvo</p><p className="text-lg font-bold text-emerald-600">{selectedProduction?.precoAlvo}</p></div>
+                                    <div className="p-2 bg-slate-50 rounded"><p className="text-xs uppercase font-bold">Pre√ßo Alvo</p><p className="text-lg font-bold text-emerald-600">{selectedProduction?.precoAlvo}</p></div>
                                 </div>
                             )}
                         </div>
                         <div className="bg-white p-6 rounded-lg shadow-md xl:col-span-2">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xl font-bold text-indigo-700 flex items-center"><ShoppingCartIcon className="h-6 w-6 mr-2" />SolicitaÁıes</h3>
+                                <h3 className="text-xl font-bold text-indigo-700 flex items-center"><ShoppingCartIcon className="h-6 w-6 mr-2" />Solicita√ß√µes</h3>
                                 {pendingRequests.length > 0 && <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">{pendingRequests.length} Pendentes</span>}
                             </div>
-                            {pendingRequests.length === 0 ? <p>Nenhuma solicitaÁ„o pendente.</p> : (
+                            {pendingRequests.length === 0 ? <p>Nenhuma solicita√ß√£o pendente.</p> : (
                                 <div className="space-y-3">
                                     {pendingRequests.map(r => (
                                         <div key={r.id} className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
@@ -267,7 +267,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                         )}
                         {!isConsolidatedView && sectorConfig?.quickActions.length && (
                             <div className="bg-white p-6 rounded-lg shadow-md xl:col-span-2">
-                                <h3 className="text-xl font-bold mb-4">AÁıes R·pidas</h3>
+                                <h3 className="text-xl font-bold mb-4">A√ß√µes R√°pidas</h3>
                                 <div className="space-y-2">
                                     {sectorConfig.quickActions.map(a => (
                                         <button key={a.id} onClick={() => setCurrentAction(a.id as OperationalActionType)} className="w-full text-left p-3 bg-slate-50 hover:bg-sky-100 rounded-lg">
@@ -279,7 +279,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ selectedProductio
                         )}
                     </div>
                 )}
-                {!isConsolidatedView && selectedProduction?.type.includes('Pecu·ria') && animalDetails && viewMode === 'Cards' && (
+                {!isConsolidatedView && selectedProduction?.type.includes('Pecu√°ria') && animalDetails && viewMode === 'Cards' && (
                     <div className="mt-6 animate-fade-in"><AnimalProductionDetail details={animalDetails} /></div>
                 )}
               </>

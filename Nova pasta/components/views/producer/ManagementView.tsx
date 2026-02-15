@@ -10,6 +10,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import { managementService } from '../../../services/managementService';
 import { propertyService } from '../../../services/propertyService';
 import { stockService } from '../../../services/stockService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void }> = ({ alert, onResolve }) => {
     const severityColors: Record<ManagementAlert['severity'], string> = {
@@ -36,6 +37,7 @@ const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void
 };
 
 const ManagementView: React.FC = () => {
+    const { addToast } = useToast();
     const [projects, setProjects] = useState<ProductionProject[]>([]);
     const [history, setHistory] = useState<ManagementRecord[]>([]);
     const [alerts, setAlerts] = useState<ManagementAlert[]>([]);
@@ -106,32 +108,23 @@ const ManagementView: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.target || !form.product || !form.quantity) return;
 
-        const newRecord: ManagementRecord = {
-            id: `HIST-${Date.now()}`,
-            date: new Date().toLocaleDateString('pt-BR'),
-            target: form.target,
-            actionType: activeTab,
-            product: form.product,
-            quantity: form.quantity,
-            executor: 'Eu',
-        };
-
-        setHistory([newRecord, ...history]);
-        setForm({ target: '', product: '', quantity: '' });
-        
-        const btn = document.getElementById('submit-btn');
-        if(btn) {
-            const originalText = btn.innerText;
-            btn.innerText = 'Registrado!';
-            btn.classList.add('bg-green-600');
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.classList.remove('bg-green-600');
-            }, 1500);
+        try {
+            const newRecord = await managementService.createHistoryRecord({
+                target: form.target,
+                actionType: activeTab,
+                product: form.product,
+                quantity: form.quantity,
+                executor: "Eu",
+            });
+            setHistory((prev) => [newRecord, ...prev]);
+            setForm({ target: "", product: "", quantity: "" });
+            addToast({ type: "success", title: "Manejo registrado", message: "A operacao foi salva com sucesso." });
+        } catch {
+            addToast({ type: "error", title: "Falha ao salvar", message: "Nao foi possivel persistir o registro de manejo." });
         }
     };
 

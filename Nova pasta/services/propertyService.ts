@@ -17,6 +17,7 @@ import {
 import { Property, Pasture, ProductionProject, PastureManagementHistoryItem } from '../types';
 import { Validators, ValidationResult } from '../lib/validators';
 import { db } from '../config/firebase';
+import { backendApi } from './backendApi';
 
 const propertyCollection = collection(db, 'properties');
 const pastureCollection = collection(db, 'pastures');
@@ -70,6 +71,46 @@ const toProject = (id: string, raw: Record<string, unknown>): ProductionProject 
   limiteVigente: Number(raw.limiteVigente ?? 0),
   limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
 });
+
+const normalizePointToCanvas = (
+  points: { lat: string; long: string }[]
+): { x: number; y: number }[] => {
+  const parsed = points.map((point) => ({
+    lat: Number(point.lat),
+    lon: Number(point.long),
+  }));
+  const minLat = Math.min(...parsed.map((point) => point.lat));
+  const maxLat = Math.max(...parsed.map((point) => point.lat));
+  const minLon = Math.min(...parsed.map((point) => point.lon));
+  const maxLon = Math.max(...parsed.map((point) => point.lon));
+
+  const latRange = Math.max(maxLat - minLat, 0.00001);
+  const lonRange = Math.max(maxLon - minLon, 0.00001);
+
+  return parsed.map((point) => ({
+    x: 20 + ((point.lon - minLon) / lonRange) * 60,
+    y: 20 + ((point.lat - minLat) / latRange) * 60,
+  }));
+};
+
+const estimateAreaFromPoints = (points: { lat: string; long: string }[]): number => {
+  const cartesian = points.map((point) => ({
+    x: Number(point.long),
+    y: Number(point.lat),
+  }));
+
+  let area = 0;
+  for (let i = 0; i < cartesian.length; i += 1) {
+    const current = cartesian[i];
+    const next = cartesian[(i + 1) % cartesian.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+
+  const absolute = Math.abs(area / 2);
+  const hectareFactor = 110_000;
+  const estimatedHectare = absolute * hectareFactor;
+  return Number(Math.max(estimatedHectare, 1).toFixed(2));
+};
 
 async function ensureSeedData() {
   if (seeded) {
@@ -126,6 +167,16 @@ async function ensureSeedData() {
 }
 
 export const propertyService = {
+  getEmptyProperty(): Property {
+    return {
+      ...mockPropertyData,
+      pastureManagementHistory: [...mockPropertyData.pastureManagementHistory],
+      perimeter: [...(mockPropertyData.perimeter ?? [])],
+      infrastructure: [...(mockPropertyData.infrastructure ?? [])],
+      machinery: [...(mockPropertyData.machinery ?? [])],
+    };
+  },
+
   async loadWorkspace(
     propertyId: string = DEFAULT_PROPERTY_ID
   ): Promise<{ property: Property; activities: ProductionProject[]; pastures: Pasture[] }> {
@@ -157,24 +208,18 @@ export const propertyService = {
   },
 
   async searchCAR(carInput: string): Promise<{ success: boolean; data?: unknown; message?: string }> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (carInput && carInput.length > 5) {
-          const sicarData = {
-            protocol: carInput,
-            municipality: 'Sorriso - MT',
-            totalArea: '1.200,00 ha',
-            rl: '240,00 ha (20%)',
-            app: '150,00 ha',
-            status: 'ATIVO',
-            owner: 'Fazenda Boa Esperanca Ltda',
-          };
-          resolve({ success: true, data: sicarData });
-        } else {
-          resolve({ success: false, message: 'CAR nao encontrado. Verifique o numero do recibo.' });
-        }
-      }, 900);
-    });
+    try {
+      const data = await backendApi.lookupCar(carInput);
+      return { success: true, data };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'CAR nao encontrado. Verifique o numero do recibo.';
+      return { success: false, message };
+    }
+  },
+
+  async listProductionProjects(): Promise<ProductionProject[]> {
+    const { activities } = await this.loadWorkspace();
+    return activities;
   },
 
   async saveDivision(divisionData: {
@@ -189,15 +234,13 @@ export const propertyService = {
     await ensureSeedData();
 
     const { name, points } = divisionData;
-    const mockSvgPoints = points.map((pt, i) => ({
-      x: 20 + (Math.abs(parseFloat(pt.long)) % 1) * 60 + i * 5,
-      y: 20 + (Math.abs(parseFloat(pt.lat)) % 1) * 60 + i * 5,
-    }));
+    const polygonPoints = normalizePointToCanvas(points);
+    const estimatedArea = estimateAreaFromPoints(points);
 
     const newPasture: Pasture = {
       id: `PAST-${Date.now()}`,
       name,
-      area: Math.floor(Math.random() * (100 - 20 + 1) + 20),
+      area: estimatedArea,
       grassHeight: 0,
       cultivar: 'N/A',
       estimatedForageProduction: 0,
@@ -208,8 +251,8 @@ export const propertyService = {
       managementRecommendations: [],
       managementHistory: [],
       animals: [],
-      polygon: mockSvgPoints,
-      center: mockSvgPoints[0],
+      polygon: polygonPoints,
+      center: polygonPoints[0],
     };
 
     await setDoc(

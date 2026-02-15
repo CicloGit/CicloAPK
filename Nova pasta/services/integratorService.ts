@@ -22,7 +22,7 @@ const toIntegratedProducer = (id: string, raw: Record<string, unknown>): Integra
   maskedName: String(raw.maskedName ?? ''),
   region: String(raw.region ?? ''),
   productionType: (raw.productionType as IntegratedProducer['productionType']) ?? 'Agricultura',
-  status: (raw.status as IntegratedProducer['status']) ?? 'Disponivel',
+  status: (raw.status as IntegratedProducer['status']) ?? 'Disponível',
   capacity: String(raw.capacity ?? ''),
   auditScore: Number(raw.auditScore ?? 0),
   lastAuditDate: String(raw.lastAuditDate ?? ''),
@@ -130,5 +130,25 @@ export const integratorService = {
     });
 
     return newMessage;
+  },
+
+  async createDemand(data: Pick<PartnershipOffer, 'title' | 'description' | 'type'>): Promise<PartnershipOffer> {
+    await ensureSeedData();
+    const newDemand: PartnershipOffer = {
+      id: `DEM-${Date.now()}`,
+      title: data.title,
+      description: data.description,
+      type: data.type,
+      status: 'Aberta',
+      applicants: 0,
+    };
+
+    await setDoc(doc(db, 'partnershipOffers', newDemand.id), {
+      ...newDemand,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newDemand;
   },
 };

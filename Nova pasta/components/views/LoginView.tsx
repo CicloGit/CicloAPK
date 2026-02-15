@@ -33,7 +33,8 @@ const LoginView: React.FC = () => {
       return;
     }
 
-    navigate(from, { replace: true });
+    const safeTarget = from === '/login' ? '/' : from;
+    navigate(safeTarget, { replace: true });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {

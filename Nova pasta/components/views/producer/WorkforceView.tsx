@@ -33,9 +33,7 @@ const WorkforceView: React.FC = () => {
 
     const handleGenerateReport = () => {
         addToast({ type: 'info', title: 'Gerando Relatorio', message: 'Laudo de Conformidade SST sendo processado para download.' });
-        setTimeout(() => {
-            addToast({ type: 'success', title: 'Download Pronto', message: 'O arquivo PDF foi gerado com sucesso.' });
-        }, 1500);
+        addToast({ type: 'success', title: 'Download Pronto', message: 'O arquivo PDF foi gerado com sucesso.' });
     };
 
     const handleSaveRules = () => {

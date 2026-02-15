@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ViewType } from '../../types';
+import { ProductionProject, ViewType } from '../../types';
 import { useApp } from '../../contexts/AppContext';
 import { roleAccessConfig } from '../../config/accessControl';
 import { getSectorSettings } from '../../config/sectorUtils';
-import { mockProductionProjects } from '../../constants';
+import { propertyService } from '../../services/propertyService';
 
 // Icons
 import HomeIcon from '../icons/HomeIcon';
@@ -52,11 +52,41 @@ const Sidebar: React.FC = () => {
   const { currentUser, logout, selectedProductionId } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
-  
+  const [projects, setProjects] = useState<ProductionProject[]>([]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setProjects([]);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadProjects = async () => {
+      try {
+        const items = await propertyService.listProductionProjects();
+        if (mounted) {
+          setProjects(items);
+        }
+      } catch {
+        if (mounted) {
+          setProjects([]);
+        }
+      }
+    };
+
+    void loadProjects();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser]);
+
   if (!currentUser) return null;
 
   const userAccessList = roleAccessConfig[currentUser.role];
-  const selectedProduction = mockProductionProjects.find(p => p.id === selectedProductionId);
+
+  const selectedProduction = projects.find(p => p.id === selectedProductionId);
   const sectorSettings = getSectorSettings(selectedProduction?.type);
 
   const isViewAllowed = (viewId: string) => userAccessList.includes(viewId as ViewType);

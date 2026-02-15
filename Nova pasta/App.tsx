@@ -8,7 +8,6 @@ import { ToastProvider } from './contexts/ToastContext';
 import LoadingSpinner from './components/shared/LoadingSpinner';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import ToastContainer from './components/shared/ToastContainer';
-import { featureMap } from './constants';
 import { ViewType } from './types';
 import { roleAccessConfig } from './config/accessControl';
 
@@ -70,7 +69,7 @@ const AuthorizationGuard = () => {
     const targetView = (basePath === '/' || basePath === '') ? 'dashboard' : PATH_TO_VIEW_MAP[basePath];
     if (currentUser && targetView) {
         const allowedViews = roleAccessConfig[currentUser.role];
-        if (!allowedViews.includes(targetView)) {
+        if (!allowedViews || !allowedViews.includes(targetView)) {
             return <Navigate to="/unauthorized" replace />;
         }
     }

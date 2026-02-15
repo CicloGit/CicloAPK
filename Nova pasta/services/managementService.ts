@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -80,8 +81,29 @@ export const managementService = {
 
   async listHistory(): Promise<ManagementRecord[]> {
     await ensureSeedData();
-    const snapshot = await getDocs(historyCollection);
+    const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+  },
+
+  async createHistoryRecord(data: Omit<ManagementRecord, 'id' | 'date'>): Promise<ManagementRecord> {
+    await ensureSeedData();
+    const newRecord: ManagementRecord = {
+      id: `HIST-${Date.now()}`,
+      date: new Date().toLocaleDateString('pt-BR'),
+      target: data.target,
+      actionType: data.actionType,
+      product: data.product,
+      quantity: data.quantity,
+      executor: data.executor,
+    };
+
+    await setDoc(doc(db, 'managementHistory', newRecord.id), {
+      ...newRecord,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newRecord;
   },
 };

@@ -7,8 +7,10 @@ import { getSectorSettings } from '../../../config/sectorUtils';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { liveHandlingService, LiveHandlingEntry } from '../../../services/liveHandlingService';
 import { producerDashboardService } from '../../../services/producerDashboardService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const LiveHandlingView: React.FC = () => {
+    const { addToast } = useToast();
     const [projects, setProjects] = useState<ProductionProject[]>([]);
     const [animalDetailsMap, setAnimalDetailsMap] = useState<Record<string, AnimalProductionDetails>>({});
     const [history, setHistory] = useState<LiveHandlingEntry[]>([]);
@@ -49,43 +51,49 @@ const LiveHandlingView: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        setHistory([]);
         setCurrentId('');
         setCurrentValue('');
     }, [activeProject?.type]);
 
     const handleScan = () => {
+        const baseId = currentId || 'ID-DETECTADO-001';
         setScannedEntity({
-            id: currentId || 'ID-DETECTADO-001',
+            id: baseId,
             category: 'Lote A',
             status: 'Em Producao',
             lastValue: '---'
         });
-        setCurrentId(currentId || 'ID-DETECTADO-001');
+        setCurrentId(baseId);
         
         if (isConnectedScale) {
-            const randomVal = sectorSettings.liveHandling.primaryUnit === 'kg' ? (300 + Math.random() * 50).toFixed(2) 
-                            : sectorSettings.liveHandling.primaryUnit === 'pH' ? (6.5 + Math.random()).toFixed(1)
-                            : (10 + Math.random() * 5).toFixed(1);
-            setCurrentValue(randomVal);
+            const hash = baseId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const unit = sectorSettings.liveHandling.primaryUnit;
+            const computedVal = unit === 'kg'
+                ? (300 + (hash % 50) + 0.25).toFixed(2)
+                : unit === 'pH'
+                ? (6.5 + (hash % 10) / 10).toFixed(1)
+                : (10 + (hash % 5) + 0.1).toFixed(1);
+            setCurrentValue(computedVal);
         }
     };
 
-    const handleAction = (action: string) => {
+    const handleAction = async (action: string) => {
         if (!currentId || !currentValue) return;
 
-        const newEntry: LiveHandlingEntry = {
-            id: `LIVE-${Date.now()}`,
-            entityId: currentId,
-            value: `${currentValue} ${sectorSettings.liveHandling.primaryUnit}`,
-            action: action,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setHistory([newEntry, ...history]);
-        setCurrentId('');
-        setCurrentValue('');
-        setScannedEntity(null);
+        try {
+            const newEntry: LiveHandlingEntry = await liveHandlingService.createEntry({
+                entityId: currentId,
+                value: `${currentValue} ${sectorSettings.liveHandling.primaryUnit}`,
+                action,
+            });
+            setHistory((prev) => [newEntry, ...prev]);
+            setCurrentId('');
+            setCurrentValue('');
+            setScannedEntity(null);
+            addToast({ type: 'success', title: 'Registro salvo', message: 'Manejo ao vivo persistido no banco.' });
+        } catch {
+            addToast({ type: 'error', title: 'Falha ao salvar', message: 'Nao foi possivel persistir o manejo ao vivo.' });
+        }
     };
 
     if (isLoading) {

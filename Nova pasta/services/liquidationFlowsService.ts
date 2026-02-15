@@ -54,7 +54,7 @@ export const liquidationFlowsService = {
   async listFlows(): Promise<LiquidationFlow[]> {
     await ensureSeedData();
     const snapshot = await getDocs(liquidationFlowsCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toLiquidationFlow(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },

@@ -8,9 +8,13 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "functions:install": "cd functions && npm install",
+    "functions:build": "cd functions && npm run build",
     "emulators:start": "npx firebase-tools emulators:start --import=.firebase/emulator-data --export-on-exit=.firebase/emulator-data",
-    "emulators:clean": "npx firebase-tools emulators:start --only auth,firestore,storage",
-    "firebase:deploy:rules": "npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage"
+    "emulators:clean": "npx firebase-tools emulators:start --only auth,firestore,storage,functions",
+    "firebase:deploy:rules": "npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage",
+    "firebase:deploy:functions": "npx firebase-tools deploy --only functions",
+    "firebase:deploy:hosting:safe": "bash ../scripts/firebase-deploy-safe.sh"
   },
   "dependencies": {
     "firebase": "^10.7.0",
@@ -24,8 +28,10 @@
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "firebase-tools": "^13.33.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
+    "terser": "^5.39.0",
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
   }

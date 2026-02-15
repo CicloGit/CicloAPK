@@ -153,50 +153,55 @@ export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {
     await ensureSeedData();
     const snapshot = await getDocs(financialDetailsCollection);
-    return snapshot.docs.reduce<Record<string, FinancialDetails>>((acc, docSnapshot: any) => {
+    const mapped: Record<string, FinancialDetails> = {};
+    snapshot.docs.forEach((docSnapshot: any) => {
       const details = toFinancialDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      acc[details.projectId] = details;
-      return acc;
-    }, {});
+      mapped[details.projectId] = details;
+    });
+    return mapped;
   },
 
   async listAnimalDetails(): Promise<Record<string, AnimalProductionDetails>> {
     await ensureSeedData();
     const snapshot = await getDocs(animalDetailsCollection);
-    return snapshot.docs.reduce<Record<string, AnimalProductionDetails>>((acc, docSnapshot: any) => {
+    const mapped: Record<string, AnimalProductionDetails> = {};
+    snapshot.docs.forEach((docSnapshot: any) => {
       const details = toAnimalDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      acc[details.projectId] = details;
-      return acc;
-    }, {});
+      mapped[details.projectId] = details;
+    });
+    return mapped;
   },
 
   async listSectorDetails(): Promise<Record<string, SectorSpecificData>> {
     await ensureSeedData();
     const snapshot = await getDocs(sectorDetailsCollection);
-    return snapshot.docs.reduce<Record<string, SectorSpecificData>>((acc, docSnapshot: any) => {
+    const mapped: Record<string, SectorSpecificData> = {};
+    snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      acc[docSnapshot.id] = details;
-      return acc;
-    }, {});
+      mapped[docSnapshot.id] = details;
+    });
+    return mapped;
   },
 
   async listStageDetails(): Promise<Record<string, SectorSpecificData>> {
     await ensureSeedData();
     const snapshot = await getDocs(stageDetailsCollection);
-    return snapshot.docs.reduce<Record<string, SectorSpecificData>>((acc, docSnapshot: any) => {
+    const mapped: Record<string, SectorSpecificData> = {};
+    snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      acc[docSnapshot.id] = details;
-      return acc;
-    }, {});
+      mapped[docSnapshot.id] = details;
+    });
+    return mapped;
   },
 
   async listProjectStages(): Promise<Record<string, ProjectStage[]>> {
     await ensureSeedData();
     const snapshot = await getDocs(projectStagesCollection);
-    return snapshot.docs.reduce<Record<string, ProjectStage[]>>((acc, docSnapshot: any) => {
-      acc[docSnapshot.id] = toProjectStages(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
-      return acc;
-    }, {});
+    const mapped: Record<string, ProjectStage[]> = {};
+    snapshot.docs.forEach((docSnapshot: any) => {
+      mapped[docSnapshot.id] = toProjectStages(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
+    });
+    return mapped;
   },
 
   async listAuditEvents(): Promise<AuditEvent[]> {

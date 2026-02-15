@@ -27,6 +27,14 @@ interface AppContextType extends AppState {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+const VALID_ROLES: User['role'][] = ['Produtor', 'Gestor', 'Técnico', 'Investidor', 'Fornecedor', 'Integradora', 'Operador', 'Produtor de Sementes'];
+
+const normalizeRole = (role: unknown): User['role'] => {
+  if (typeof role !== 'string') {
+    return 'Produtor';
+  }
+  return (VALID_ROLES.includes(role as User['role']) ? role : 'Produtor') as User['role'];
+};
 
 const mapAuthErrorMessage = (error: unknown): string => {
   const code = (error as { code?: string } | undefined)?.code ?? '';
@@ -54,7 +62,7 @@ const buildUserFromProfile = (firebaseUser: any, profile: Partial<User> | undefi
     uid: firebaseUser.uid,
     email: firebaseUser.email ?? undefined,
     name: profile?.name ?? fallbackName,
-    role: profile?.role ?? 'Produtor',
+    role: normalizeRole(profile?.role),
   };
 };
 
@@ -149,7 +157,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         uid: credentials.user.uid,
         email,
         name,
-        role,
+        role: normalizeRole(role),
       };
 
       await setDoc(

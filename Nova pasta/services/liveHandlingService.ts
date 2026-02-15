@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -93,8 +94,27 @@ export const liveHandlingService = {
 
   async listHistory(): Promise<LiveHandlingEntry[]> {
     await ensureSeedData();
-    const snapshot = await getDocs(historyCollection);
+    const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+  },
+
+  async createEntry(payload: Omit<LiveHandlingEntry, 'id' | 'time'>): Promise<LiveHandlingEntry> {
+    await ensureSeedData();
+    const newEntry: LiveHandlingEntry = {
+      id: `LIVE-${Date.now()}`,
+      entityId: payload.entityId,
+      value: payload.value,
+      action: payload.action,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    await setDoc(doc(db, 'liveHandlingHistory', newEntry.id), {
+      ...newEntry,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newEntry;
   },
 };

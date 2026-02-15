@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import LoadingSpinner from './shared/LoadingSpinner';
-import { legalService, LegalComplianceAlert, LegalContract, LegalLicense } from '../services/legalService';
+import LoadingSpinner from '../shared/LoadingSpinner';
+import { legalService, LegalComplianceAlert, LegalContract, LegalLicense } from '../../services/legalService';
 
 const LegalView: React.FC = () => {
   const [contracts, setContracts] = useState<LegalContract[]>([]);

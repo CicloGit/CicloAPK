@@ -88,4 +88,26 @@ export const fieldOperationsService = {
     return snapshot.docs
       .map((docSnapshot: any) => toDiaryEntry(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
+
+  async createDiaryEntry(payload: Omit<FieldDiaryEntry, 'id' | 'date'>): Promise<FieldDiaryEntry> {
+    await ensureSeedData();
+    const newEntry: FieldDiaryEntry = {
+      id: `FD-${Date.now()}`,
+      author: payload.author,
+      role: payload.role,
+      date: new Date().toLocaleString('pt-BR'),
+      location: payload.location,
+      type: payload.type,
+      transcript: payload.transcript,
+      aiAction: payload.aiAction,
+    };
+
+    await setDoc(doc(db, 'fieldDiaryEntries', newEntry.id), {
+      ...newEntry,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newEntry;
+  },
 };

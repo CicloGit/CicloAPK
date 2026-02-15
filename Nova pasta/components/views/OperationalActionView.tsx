@@ -68,7 +68,7 @@ const OperationalActionView: React.FC = () => {
             setLoadError(null);
             try {
                 const projects = await propertyService.listProductionProjects();
-                const found = projects.find((item) => item.id === projectId) ?? null;
+                const found = projects.find((item: ProductionProject) => item.id === projectId) ?? null;
                 setProject(found);
             } catch {
                 setLoadError('Nao foi possivel carregar o projeto selecionado.');

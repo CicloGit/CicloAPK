@@ -12,6 +12,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { operatorService } from '../../../services/operatorService';
 import { financialService } from '../../../services/financialService';
+import { fieldOperationsService } from '../../../services/fieldOperationsService';
 
 const OperatorPortalView: React.FC = () => {
     const { addToast } = useToast();
@@ -31,6 +32,7 @@ const OperatorPortalView: React.FC = () => {
     // Diary State
     const [isRecording, setIsRecording] = useState(false);
     const [mediaAttached, setMediaAttached] = useState<'AUDIO' | 'PHOTO' | null>(null);
+    const [diaryNote, setDiaryNote] = useState('');
 
     // Clock State
     const [clockStatus, setClockStatus] = useState<'IDLE' | 'WORKING' | 'BREAK'>('IDLE');
@@ -141,9 +143,25 @@ const OperatorPortalView: React.FC = () => {
         addToast({ type: 'success', title: 'Foto Capturada', message: 'Imagem anexada ao diario.' });
     };
 
-    const sendDiaryEntry = () => {
-        setMediaAttached(null);
-        addToast({ type: 'success', title: 'Diario Enviado', message: 'Relato salvo. A transcricao automatica iniciara em breve.' });
+    const sendDiaryEntry = async () => {
+        if (!mediaAttached) {
+            return;
+        }
+        try {
+            await fieldOperationsService.createDiaryEntry({
+                author: 'Jose',
+                role: 'Operador',
+                location: 'Campo',
+                type: mediaAttached,
+                transcript: diaryNote.trim() || `Relato enviado com mídia ${mediaAttached}.`,
+                aiAction: mediaAttached === 'AUDIO' ? 'Transcricao pendente' : undefined,
+            });
+            setMediaAttached(null);
+            setDiaryNote('');
+            addToast({ type: 'success', title: 'Diario Enviado', message: 'Relato salvo no banco de dados.' });
+        } catch {
+            addToast({ type: 'error', title: 'Falha no diario', message: 'Nao foi possivel salvar o relato de campo.' });
+        }
     };
 
     const handleClockAction = (action: 'START' | 'BREAK' | 'STOP') => {
@@ -282,6 +300,14 @@ const OperatorPortalView: React.FC = () => {
                                 <button onClick={() => setMediaAttached(null)} className="text-red-500"><XIcon className="h-5 w-5"/></button>
                             </div>
                         )}
+
+                        <textarea
+                            value={diaryNote}
+                            onChange={(e) => setDiaryNote(e.target.value)}
+                            placeholder="Descreva o ocorrido (opcional)"
+                            className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
+                            rows={3}
+                        />
 
                         <button 
                             onClick={sendDiaryEntry}

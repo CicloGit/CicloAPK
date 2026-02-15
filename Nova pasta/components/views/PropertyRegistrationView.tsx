@@ -4,7 +4,6 @@ import {
   PRICE_PER_KG_LIVE_WEIGHT,
   SECTOR_VARIETIES,
   cultivarFactors,
-  mockPropertyData,
   productFactors,
 } from '../../constants';
 import {
@@ -24,8 +23,8 @@ const PropertyRegistrationView: React.FC = () => {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState<'Data' | 'Map'>('Data');
 
-  const [propertyData, setPropertyData] = useState<Property>(mockPropertyData);
-  const [editableData, setEditableData] = useState<Property>(mockPropertyData);
+  const [propertyData, setPropertyData] = useState<Property>(propertyService.getEmptyProperty());
+  const [editableData, setEditableData] = useState<Property>(propertyService.getEmptyProperty());
   const [isEditing, setIsEditing] = useState(false);
 
   const [activities, setActivities] = useState<ProductionProject[]>([]);
