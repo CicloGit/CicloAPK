@@ -628,6 +628,44 @@ export interface CarbonCredit {
     certificateHash: string;
 }
 
+export interface ProducerAnimalLot {
+    id: string;
+    name: string;
+    category: string;
+    headcount: number;
+    averageWeightKg: number;
+    createdAt: string;
+}
+
+export interface ProducerInput {
+    id: string;
+    name: string;
+    unit: string;
+    unitCost: number;
+    stock: number;
+    createdAt: string;
+}
+
+export interface ProducerExpense {
+    id: string;
+    description: string;
+    category: 'OPERACIONAL' | 'INSUMO' | 'MANUTENCAO' | 'PESSOAL' | 'OUTROS';
+    amount: number;
+    date: string;
+    source: 'OPERADOR' | 'ADMINISTRADOR' | 'SISTEMA';
+    relatedActivityId?: string;
+}
+
+export interface ProducerOperationalActivity {
+    id: string;
+    title: string;
+    details: string;
+    actor: string;
+    actorRole: 'OPERADOR' | 'ADMINISTRADOR';
+    date: string;
+    relatedLotId?: string;
+}
+
 // --- SUPPLIER PORTAL ERP ---
 export type SupplierOrderStatus = 'PENDENTE' | 'ENVIADO' | 'ENTREGUE';
 

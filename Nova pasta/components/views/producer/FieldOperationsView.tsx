@@ -11,6 +11,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import { operatorService } from '../../../services/operatorService';
 import { fieldOperationsService, FieldDiaryEntry } from '../../../services/fieldOperationsService';
 import { useToast } from '../../../contexts/ToastContext';
+import { producerOpsService } from '../../../services/producerOpsService';
 
 const FieldOperationsView: React.FC = () => {
     const { addToast } = useToast();
@@ -53,6 +54,12 @@ const FieldOperationsView: React.FC = () => {
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
         try {
             await operatorService.updateTaskStatus(taskId, status);
+            await producerOpsService.createActivity({
+                title: action === 'APPROVE' ? 'Tarefa operacional aprovada' : 'Tarefa operacional rejeitada',
+                details: `Task ${taskId} -> ${status}`,
+                actor: 'Administrador',
+                actorRole: 'ADMINISTRADOR',
+            });
             addToast({ type: 'success', title: 'Tarefa atualizada', message: 'Status salvo no Firebase.' });
         } catch {
             if (previousStatus) {
@@ -68,6 +75,25 @@ const FieldOperationsView: React.FC = () => {
         setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status } : r));
         try {
             await operatorService.updateRequestStatus(reqId, status);
+            if (action === 'APPROVE') {
+                const approvedRequest = requests.find((request) => request.id === reqId);
+                if (approvedRequest) {
+                    await producerOpsService.registerRequestApprovalExpense({
+                        requestId: approvedRequest.id,
+                        item: approvedRequest.item,
+                        quantity: approvedRequest.quantity,
+                        actor: 'Administrador',
+                        role: 'ADMINISTRADOR',
+                    });
+                }
+            } else {
+                await producerOpsService.createActivity({
+                    title: 'Solicitacao operacional rejeitada',
+                    details: `Request ${reqId}`,
+                    actor: 'Administrador',
+                    actorRole: 'ADMINISTRADOR',
+                });
+            }
             addToast({ type: 'success', title: 'Solicitacao atualizada', message: 'Status salvo no Firebase.' });
         } catch {
             if (previousStatus) {

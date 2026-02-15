@@ -13,6 +13,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import { operatorService } from '../../../services/operatorService';
 import { financialService } from '../../../services/financialService';
 import { fieldOperationsService } from '../../../services/fieldOperationsService';
+import { producerOpsService } from '../../../services/producerOpsService';
 
 const OperatorPortalView: React.FC = () => {
     const { addToast } = useToast();
@@ -101,6 +102,12 @@ const OperatorPortalView: React.FC = () => {
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: action } : t));
         try {
             await operatorService.updateTaskStatus(taskId, action);
+            await producerOpsService.createActivity({
+                title: action === 'COMPLETED' ? 'Tarefa concluida pelo operador' : 'Tarefa rejeitada pelo operador',
+                details: `Task ${taskId}`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
+            });
             addToast({ type: 'success', title: 'Tarefa Atualizada', message: `Status alterado para ${action === 'COMPLETED' ? 'Concluido' : 'Rejeitado'}.` });
         } catch {
             addToast({ type: 'error', title: 'Falha', message: 'Nao foi possivel atualizar a tarefa.' });
@@ -120,6 +127,12 @@ const OperatorPortalView: React.FC = () => {
                 requester: 'Jose (Eu)',
             });
             setMyRequests((prev) => [newReq, ...prev]);
+            await producerOpsService.createActivity({
+                title: 'Solicitacao de compra criada',
+                details: `${requestItem} (${requestQty || 'sem quantidade'})`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
+            });
             setRequestItem('');
             setRequestQty('');
             addToast({ type: 'success', title: 'Solicitacao Enviada', message: 'O pedido foi encaminhado para aprovacao do gestor.' });
@@ -155,6 +168,12 @@ const OperatorPortalView: React.FC = () => {
                 type: mediaAttached,
                 transcript: diaryNote.trim() || `Relato enviado com mídia ${mediaAttached}.`,
                 aiAction: mediaAttached === 'AUDIO' ? 'Transcricao pendente' : undefined,
+            });
+            await producerOpsService.createActivity({
+                title: 'Diario de campo enviado',
+                details: diaryNote.trim() || `Midia ${mediaAttached}`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
             });
             setMediaAttached(null);
             setDiaryNote('');

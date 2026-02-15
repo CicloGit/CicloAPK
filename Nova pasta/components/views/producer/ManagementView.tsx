@@ -11,6 +11,7 @@ import { managementService } from '../../../services/managementService';
 import { propertyService } from '../../../services/propertyService';
 import { stockService } from '../../../services/stockService';
 import { useToast } from '../../../contexts/ToastContext';
+import { producerOpsService } from '../../../services/producerOpsService';
 
 const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void }> = ({ alert, onResolve }) => {
     const severityColors: Record<ManagementAlert['severity'], string> = {
@@ -85,6 +86,7 @@ const ManagementView: React.FC = () => {
         target: '',
         product: '',
         quantity: '',
+        estimatedCost: '',
     });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -102,7 +104,8 @@ const ManagementView: React.FC = () => {
         setForm({
             target: alert.target,
             product: '', 
-            quantity: ''
+            quantity: '',
+            estimatedCost: '',
         });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -120,13 +123,28 @@ const ManagementView: React.FC = () => {
                 quantity: form.quantity,
                 executor: "Eu",
             });
+            const operationalActivity = await producerOpsService.createActivity({
+                title: `Manejo registrado: ${activeTab}`,
+                details: `${form.product} em ${form.target} (${form.quantity})`,
+                actor: 'Administrador',
+                actorRole: 'ADMINISTRADOR',
+            });
+            if (Number(form.estimatedCost) > 0) {
+                await producerOpsService.createExpense({
+                    description: `Manejo ${activeTab}: ${form.product}`,
+                    category: 'OPERACIONAL',
+                    amount: Number(form.estimatedCost),
+                    source: 'ADMINISTRADOR',
+                    relatedActivityId: operationalActivity.id,
+                });
+            }
             const relatedAlert = alerts.find((alert) => alert.target === form.target);
             if (relatedAlert) {
                 await managementService.resolveAlert(relatedAlert.id);
                 setAlerts((prev) => prev.filter((alert) => alert.id !== relatedAlert.id));
             }
             setHistory((prev) => [newRecord, ...prev]);
-            setForm({ target: "", product: "", quantity: "" });
+            setForm({ target: "", product: "", quantity: "", estimatedCost: '' });
             addToast({ type: "success", title: "Manejo registrado", message: "A operacao foi salva com sucesso." });
         } catch {
             addToast({ type: "error", title: "Falha ao salvar", message: "Nao foi possivel persistir o registro de manejo." });
@@ -235,6 +253,18 @@ const ManagementView: React.FC = () => {
                             value={form.quantity} 
                             onChange={handleInputChange} 
                             placeholder="Ex: 50 kg, 3 doses, 20L, 2 horas" 
+                            className="w-full p-3 border border-slate-200 rounded-lg text-lg font-semibold text-slate-800 placeholder-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Custo da Operacao (R$)</label>
+                        <input
+                            type="number"
+                            name="estimatedCost"
+                            value={form.estimatedCost}
+                            onChange={handleInputChange}
+                            placeholder="Ex: 350.00"
                             className="w-full p-3 border border-slate-200 rounded-lg text-lg font-semibold text-slate-800 placeholder-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                         />
                     </div>
