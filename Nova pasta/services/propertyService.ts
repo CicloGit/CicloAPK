@@ -74,6 +74,10 @@ const toProject = (id: string, raw: Record<string, unknown>): ProductionProject 
   limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
 });
 
+const isProjectDeleted = (raw: Record<string, unknown>): boolean => {
+  return Boolean(raw.isDeleted) || Boolean(raw.deletedAt);
+};
+
 const normalizePointToCanvas = (
   points: { lat: string; long: string }[]
 ): { x: number; y: number }[] => {
@@ -195,6 +199,7 @@ export const propertyService = {
       : mockPropertyData;
 
     const activities = activitySnapshot.docs
+      .filter((docSnapshot: any) => !isProjectDeleted(docSnapshot.data() as Record<string, unknown>))
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: ProductionProject, b: ProductionProject) => a.name.localeCompare(b.name));
 
@@ -345,7 +350,21 @@ export const propertyService = {
       await deleteDoc(doc(db, 'productionProjects', activityId));
       return { success: true };
     } catch {
-      return { success: false, message: 'Nao foi possivel remover a atividade.' };
+      try {
+        await setDoc(
+          doc(db, 'productionProjects', activityId),
+          {
+            isDeleted: true,
+            deletedAt: serverTimestamp(),
+            status: 'ENCERRADO',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        return { success: true };
+      } catch {
+        return { success: false, message: 'Nao foi possivel remover a atividade.' };
+      }
     }
   },
 
