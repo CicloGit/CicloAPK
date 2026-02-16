@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import LoadingSpinner from './shared/LoadingSpinner';
-import { BankAccount, Expense, Receivable, Transaction } from '../types';
-import { financialService } from '../services/financialService';
+import LoadingSpinner from '../shared/LoadingSpinner';
+import { BankAccount, Expense, Receivable, Transaction } from '../../types';
+import { financialService } from '../../services/financialService';
 
 const formatCurrency = (value: number) => {
   try {

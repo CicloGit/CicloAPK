@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     function hasAnyRole() {
-      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Produtor de Sementes', 'Integradora'];
+      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Produtor de Sementes', 'Integradora', 'Fornecedor', 'Técnico', 'Investidor'];
     }
 
     match /users/{userId} {
@@ -130,7 +130,7 @@ service cloud.firestore {
     }
 
     match /marketTrends/{docId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if hasAnyRole();
     }
 
@@ -160,22 +160,22 @@ service cloud.firestore {
     }
 
     match /regionalStats/{docId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if hasAnyRole();
     }
 
     match /newsItems/{docId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if hasAnyRole();
     }
 
     match /auctionListings/{docId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if hasAnyRole();
     }
 
     match /marketSaturation/{docId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow write: if hasAnyRole();
     }
 
@@ -190,6 +190,11 @@ service cloud.firestore {
     }
 
     match /supplierOrders/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /marketplaceOrders/{docId} {
       allow read: if signedIn();
       allow write: if hasAnyRole();
     }
@@ -392,6 +397,16 @@ service cloud.firestore {
     match /legalComplianceAlerts/{docId} {
       allow read: if signedIn();
       allow write: if hasAnyRole();
+    }
+
+    match /carRegistry/{docId} {
+      allow read: if signedIn();
+      allow write: if hasAnyRole();
+    }
+
+    match /carQueries/{docId} {
+      allow read: if hasAnyRole();
+      allow write: if signedIn();
     }
 
     match /{document=**} {

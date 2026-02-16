@@ -1,21 +1,17 @@
 import {
   collection,
-  doc,
   getDocs,
-  limit,
+  orderBy,
   query,
-  serverTimestamp,
-  setDoc,
 } from 'firebase/firestore';
-import { mockCorporateCards, mockMarketplaceListings, mockPartnerStores } from '../constants';
 import { db } from '../config/firebase';
 import { CorporateCard, MarketplaceListing, PartnerStore } from '../types';
+import { parseDateToTimestamp } from './dateUtils';
 
 const marketplaceCollection = collection(db, 'marketplaceListings');
 const corporateCardCollection = collection(db, 'corporateCards');
 const partnerStoreCollection = collection(db, 'partnerStores');
-
-let seeded = false;
+const marketplaceOrdersCollection = collection(db, 'marketplaceOrders');
 
 const toMarketplaceListing = (id: string, raw: Record<string, unknown>): MarketplaceListing => ({
   id,
@@ -47,53 +43,17 @@ const toPartnerStore = (id: string, raw: Record<string, unknown>): PartnerStore 
   location: String(raw.location ?? ''),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(marketplaceCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockMarketplaceListings.map((item) =>
-      setDoc(doc(db, 'marketplaceListings', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockCorporateCards.map((item) =>
-      setDoc(doc(db, 'corporateCards', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPartnerStores.map((item) =>
-      setDoc(doc(db, 'partnerStores', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
+export interface MarketplaceOrderHistory {
+  id: string;
+  product: string;
+  supplier: string;
+  value: number;
+  status: string;
+  date: string;
 }
 
 export const commercialService = {
   async listMarketplaceListings(): Promise<MarketplaceListing[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(marketplaceCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toMarketplaceListing(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -101,7 +61,6 @@ export const commercialService = {
   },
 
   async listCorporateCards(): Promise<CorporateCard[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(corporateCardCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toCorporateCard(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -109,10 +68,39 @@ export const commercialService = {
   },
 
   async listPartnerStores(): Promise<PartnerStore[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(partnerStoreCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPartnerStore(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: PartnerStore, b: PartnerStore) => a.name.localeCompare(b.name));
+  },
+
+  async listMarketplaceOrderHistory(): Promise<MarketplaceOrderHistory[]> {
+    const snapshot = await getDocs(query(marketplaceOrdersCollection, orderBy('createdAt', 'desc')));
+    const rows: MarketplaceOrderHistory[] = [];
+
+    snapshot.docs.forEach((docSnapshot: any) => {
+      const raw = docSnapshot.data() as Record<string, unknown>;
+      const items = Array.isArray(raw.items) ? (raw.items as Array<Record<string, unknown>>) : [];
+      const status = String(raw.status ?? 'PAID_ESCROW');
+      const labelDate = String(raw.createdAtLabel ?? '');
+      const createdAtSeconds =
+        typeof (raw.createdAt as { seconds?: number } | undefined)?.seconds === 'number'
+          ? (raw.createdAt as { seconds: number }).seconds * 1000
+          : 0;
+      const fallbackDate = createdAtSeconds > 0 ? new Date(createdAtSeconds).toLocaleDateString('pt-BR') : labelDate;
+
+      items.forEach((item, index) => {
+        rows.push({
+          id: `${docSnapshot.id}-${index}`,
+          product: String(item.productName ?? 'Produto'),
+          supplier: String(item.supplier ?? 'Fornecedor'),
+          value: Number(item.unitPrice ?? 0) * Number(item.quantity ?? 0),
+          status: status === 'PAID_ESCROW' ? 'Aguardando Envio' : status,
+          date: fallbackDate,
+        });
+      });
+    });
+
+    return rows.sort((a, b) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 };

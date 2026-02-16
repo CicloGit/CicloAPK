@@ -59,7 +59,7 @@ export const eventsMatrixService = {
   async listModules(): Promise<EventMatrixModule[]> {
     await ensureSeedData();
     const snapshot = await getDocs(eventsMatrixCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toEventModule(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },

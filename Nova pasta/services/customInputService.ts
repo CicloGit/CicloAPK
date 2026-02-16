@@ -99,7 +99,7 @@ export const customInputService = {
   async listPastures(): Promise<CustomInputPasture[]> {
     await ensureSeedData();
     const snapshot = await getDocs(pastureCollection);
-    return snapshot.docs.map((docSnapshot) => ({
+    return snapshot.docs.map((docSnapshot: any) => ({
       id: docSnapshot.id,
       name: String((docSnapshot.data() as Record<string, unknown>).name ?? ''),
     }));

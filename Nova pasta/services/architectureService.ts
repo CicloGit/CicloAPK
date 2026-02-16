@@ -63,7 +63,7 @@ export const architectureService = {
   async listNodes(): Promise<ArchitectureNode[]> {
     await ensureSeedData();
     const snapshot = await getDocs(architectureCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toArchitectureNode(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },

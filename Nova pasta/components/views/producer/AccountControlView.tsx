@@ -6,14 +6,17 @@ import LockClosedIcon from '../../icons/LockClosedIcon';
 import ArrowDownIcon from '../../icons/ArrowDownIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { Receivable } from '../../../types';
-import { financialService } from '../../../services/financialService';
+import { financialService, financialSplitConfig } from '../../../services/financialService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const AccountControlView: React.FC = () => {
+  const { addToast } = useToast();
   const { receivableId } = useParams<{ receivableId: string }>();
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [receivable, setReceivable] = useState<Receivable | null>(null);
+  const [isReleasing, setIsReleasing] = useState(false);
 
   useEffect(() => {
     const loadReceivable = async () => {
@@ -45,9 +48,25 @@ const AccountControlView: React.FC = () => {
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const allStepsCompleted = receivable.liquidationFlow?.steps.every((step) => step.completed) ?? false;
-  const platformFee = receivable.value * 0.05;
-  const logisticsCost = receivable.value * 0.08;
+  const platformFee = receivable.value * financialSplitConfig.platformFeeRate;
+  const logisticsCost = receivable.value * financialSplitConfig.logisticsRate;
   const producerShare = receivable.value - platformFee - logisticsCost;
+
+  const handleReleasePayment = async () => {
+    if (!receivable || !allStepsCompleted || isReleasing) {
+      return;
+    }
+    setIsReleasing(true);
+    try {
+      await financialService.markReceivableAsLiquidated(receivable.id);
+      setReceivable({ ...receivable, status: 'LIQUIDADO' });
+      addToast({ type: 'success', title: 'Pagamento liberado', message: 'Recebivel liquidado no Firebase.' });
+    } catch {
+      addToast({ type: 'error', title: 'Falha ao liberar', message: 'Nao foi possivel liquidar o recebivel.' });
+    } finally {
+      setIsReleasing(false);
+    }
+  };
 
   return (
     <div>
@@ -109,10 +128,17 @@ const AccountControlView: React.FC = () => {
 
         <div className="mt-8 pt-6 border-t flex justify-end">
           <button
-            disabled={!allStepsCompleted}
-            className={`px-8 py-3 text-sm font-semibold text-white rounded-lg ${allStepsCompleted ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-slate-400 cursor-not-allowed'}`}
+            onClick={handleReleasePayment}
+            disabled={!allStepsCompleted || isReleasing || receivable.status === 'LIQUIDADO'}
+            className={`px-8 py-3 text-sm font-semibold text-white rounded-lg ${allStepsCompleted ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-slate-400 cursor-not-allowed'} disabled:opacity-60`}
           >
-            {allStepsCompleted ? 'Liberar Pagamento' : 'Aguardando Validacao'}
+            {receivable.status === 'LIQUIDADO'
+              ? 'Pagamento Liberado'
+              : isReleasing
+              ? 'Liberando...'
+              : allStepsCompleted
+              ? 'Liberar Pagamento'
+              : 'Aguardando Validacao'}
           </button>
         </div>
       </div>

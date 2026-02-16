@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { mockBankAccounts, mockExpenses, mockReceivables, mockTransactions } from '../constants';
 import { db } from '../config/firebase';
+import { parseDateToTimestamp } from './dateUtils';
 import { BankAccount, Expense, Receivable, Transaction } from '../types';
 
 const accountCollection = collection(db, 'bankAccounts');
@@ -18,6 +19,11 @@ const expenseCollection = collection(db, 'expenses');
 const transactionCollection = collection(db, 'transactions');
 
 let seeded = false;
+
+export const financialSplitConfig = {
+  platformFeeRate: 0.05,
+  logisticsRate: 0.08,
+} as const;
 
 const toReceivable = (id: string, raw: Record<string, unknown>): Receivable => ({
   id,
@@ -135,7 +141,7 @@ export const financialService = {
     const snapshot = await getDocs(receivableCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toReceivable(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: Receivable, b: Receivable) => a.dueDate.localeCompare(b.dueDate));
+      .sort((a: Receivable, b: Receivable) => parseDateToTimestamp(a.dueDate) - parseDateToTimestamp(b.dueDate));
   },
 
   async listExpenses(): Promise<Expense[]> {
@@ -143,7 +149,7 @@ export const financialService = {
     const snapshot = await getDocs(expenseCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toExpense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: Expense, b: Expense) => a.dueDate.localeCompare(b.dueDate));
+      .sort((a: Expense, b: Expense) => parseDateToTimestamp(a.dueDate) - parseDateToTimestamp(b.dueDate));
   },
 
   async listBankAccounts(): Promise<BankAccount[]> {
@@ -162,7 +168,7 @@ export const financialService = {
     );
 
     const filtered = accountId ? allItems.filter((item: Transaction) => item.accountId === accountId) : allItems;
-    return filtered.sort((a: Transaction, b: Transaction) => b.date.localeCompare(a.date));
+    return filtered.sort((a: Transaction, b: Transaction) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
   async getReceivableById(receivableId: string): Promise<Receivable | null> {
@@ -172,5 +178,17 @@ export const financialService = {
       return null;
     }
     return toReceivable(snapshot.id, snapshot.data() as Record<string, unknown>);
+  },
+
+  async markReceivableAsLiquidated(receivableId: string): Promise<void> {
+    await ensureSeedData();
+    await setDoc(
+      doc(db, 'receivables', receivableId),
+      {
+        status: 'LIQUIDADO',
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   },
 };

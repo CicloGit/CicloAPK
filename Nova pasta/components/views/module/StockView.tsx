@@ -9,6 +9,7 @@ import LockClosedIcon from '../../icons/LockClosedIcon';
 import DocumentTextIcon from '../../icons/DocumentTextIcon';
 import XIcon from '../../icons/XIcon';
 import { stockService } from '../../../services/stockService';
+import { storageService } from '../../../services/storageService';
 import { useToast } from '../../../contexts/ToastContext';
 import { Validators } from '../../../lib/validators';
 import LoadingButton from '../../shared/LoadingButton';
@@ -107,11 +108,26 @@ const StockView: React.FC = () => {
         }
 
         // 2. Execute Service
+        if (!lossPhoto) {
+            setFormError('Foto da perda obrigatoria para auditoria.');
+            setIsSubmitting(false);
+            return;
+        }
+
+        let proofUrl = '';
+        try {
+            proofUrl = await storageService.uploadStockLossProof(lossPhoto, lossItem || 'stock-loss');
+        } catch {
+            setFormError('Falha ao enviar evidência para o Storage.');
+            setIsSubmitting(false);
+            return;
+        }
+
         const result = await stockService.registerStockUsage({
             itemId: lossItem,
             quantity: Number(lossQty),
             reason: lossReason,
-            proofUrl: 'simulated_proof_url.jpg', // In a real app, this would be an uploaded URL
+            proofUrl,
             requester: 'João Silva (Produtor)'
         });
         

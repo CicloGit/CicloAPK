@@ -52,7 +52,7 @@ export const operationsTableService = {
   async listOperations(): Promise<Operation[]> {
     await ensureSeedData();
     const snapshot = await getDocs(operationsCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toOperation(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },

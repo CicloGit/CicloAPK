@@ -4,7 +4,6 @@ import {
   PRICE_PER_KG_LIVE_WEIGHT,
   SECTOR_VARIETIES,
   cultivarFactors,
-  mockPropertyData,
   productFactors,
 } from '../../constants';
 import {
@@ -24,8 +23,8 @@ const PropertyRegistrationView: React.FC = () => {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState<'Data' | 'Map'>('Data');
 
-  const [propertyData, setPropertyData] = useState<Property>(mockPropertyData);
-  const [editableData, setEditableData] = useState<Property>(mockPropertyData);
+  const [propertyData, setPropertyData] = useState<Property>(propertyService.getEmptyProperty());
+  const [editableData, setEditableData] = useState<Property>(propertyService.getEmptyProperty());
   const [isEditing, setIsEditing] = useState(false);
 
   const [activities, setActivities] = useState<ProductionProject[]>([]);
@@ -44,6 +43,8 @@ const PropertyRegistrationView: React.FC = () => {
   const [carInput, setCarInput] = useState('');
   const [carSearchStatus, setCarSearchStatus] = useState<'IDLE' | 'LOADING' | 'FOUND' | 'ERROR'>('IDLE');
   const [sicarData, setSicarData] = useState<Record<string, string> | null>(null);
+  const [pendingDeleteActivity, setPendingDeleteActivity] = useState<ProductionProject | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
 
   const [selectedCultivar, setSelectedCultivar] = useState(cultivarFactors[0].name);
   const [selectedProduct, setSelectedProduct] = useState(productFactors[0].name);
@@ -118,13 +119,19 @@ const PropertyRegistrationView: React.FC = () => {
     setNewActivity({ sector: '', variety: '', name: '', volume: '' });
   };
 
-  const handleDeleteActivity = async (id: string) => {
-    const result = await propertyService.deleteActivity(id);
+  const handleDeleteActivity = async () => {
+    if (!pendingDeleteActivity) {
+      return;
+    }
+    const result = await propertyService.deleteActivity(pendingDeleteActivity.id, deletePassword);
     if (!result.success) {
       addToast({ type: 'error', title: 'Falha na exclusao', message: result.message || 'Nao foi possivel remover.' });
       return;
     }
-    setActivities((prev) => prev.filter((activity) => activity.id !== id));
+    setActivities((prev) => prev.filter((activity) => activity.id !== pendingDeleteActivity.id));
+    setPendingDeleteActivity(null);
+    setDeletePassword('');
+    addToast({ type: 'success', title: 'Atividade excluida', message: 'Registro removido com sucesso.' });
   };
 
   const handleSaveDivision = async () => {
@@ -334,10 +341,45 @@ const PropertyRegistrationView: React.FC = () => {
                     <p className="font-semibold text-slate-800">{activity.name}</p>
                     <p className="text-xs text-slate-500">{activity.type} | {activity.status} | {activity.volume}</p>
                   </div>
-                  <button onClick={() => void handleDeleteActivity(activity.id)} className="text-red-600 text-sm">Excluir</button>
+                  <button
+                    onClick={() => {
+                      setPendingDeleteActivity(activity);
+                      setDeletePassword('');
+                    }}
+                    className="text-red-600 text-sm"
+                  >
+                    Excluir
+                  </button>
                 </div>
               ))}
             </div>
+            {pendingDeleteActivity && (
+              <div className="mt-3 border border-red-200 bg-red-50 rounded p-3 space-y-2">
+                <p className="text-sm text-red-700">
+                  Excluir atividade <strong>{pendingDeleteActivity.name}</strong> ({pendingDeleteActivity.type}).
+                </p>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  className="p-2 border rounded w-full"
+                  placeholder="Senha de autorizacao"
+                />
+                <p className="text-xs text-red-700">Senha padrao (se nao configurada no .env): CICLO123</p>
+                <div className="flex gap-2">
+                  <button onClick={() => void handleDeleteActivity()} className="px-3 py-2 bg-red-600 text-white rounded text-sm">Confirmar exclusao</button>
+                  <button
+                    onClick={() => {
+                      setPendingDeleteActivity(null);
+                      setDeletePassword('');
+                    }}
+                    className="px-3 py-2 bg-slate-200 text-slate-700 rounded text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}

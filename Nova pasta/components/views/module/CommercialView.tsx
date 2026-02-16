@@ -13,7 +13,8 @@ import FilterIcon from '../../icons/FilterIcon';
 import { CubeIcon } from '../../icons/CubeIcon';
 import { useToast } from '../../../contexts/ToastContext';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { commercialService } from '../../../services/commercialService';
+import { commercialService, MarketplaceOrderHistory } from '../../../services/commercialService';
+import { marketOrderService } from '../../../services/marketOrderService';
 
 const CommercialView: React.FC = () => {
     const { addToast } = useToast();
@@ -33,12 +34,9 @@ const CommercialView: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
     const [userLocation, setUserLocation] = useState('Sorriso, MT'); // Mocked User Location
     const [sortBy, setSortBy] = useState<'price_asc' | 'rating_desc'>('price_asc');
+    const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
 
-    // Mocks for order history to show instant update after purchase
-    const [orders, setOrders] = useState([
-        { id: 'ORD-2024-88', product: 'Adubo Orgânico', supplier: 'AgroFertilizantes Ltda', value: 1200.00, status: 'Em Trânsito' },
-        { id: 'ORD-2024-72', product: 'Vacina Aftosa', supplier: 'VetCenter', value: 450.00, status: 'Entregue' }
-    ]);
+    const [orders, setOrders] = useState<MarketplaceOrderHistory[]>([]);
 
     useEffect(() => {
         const loadCommercialData = async () => {
@@ -50,9 +48,11 @@ const CommercialView: React.FC = () => {
                     commercialService.listCorporateCards(),
                     commercialService.listPartnerStores()
                 ]);
+                const loadedOrders = await commercialService.listMarketplaceOrderHistory();
                 setMarketplaceListings(loadedListings);
                 setCorporateCards(loadedCards);
                 setPartnerStores(loadedStores);
+                setOrders(loadedOrders);
                 if (loadedCards.length > 0) {
                     setSelectedCardId(loadedCards[0].id);
                 }
@@ -104,22 +104,35 @@ const CommercialView: React.FC = () => {
         setCheckoutStep('cart');
     };
 
-    const processPayment = () => {
+    const processPayment = async () => {
+        if (cart.length === 0) {
+            return;
+        }
         setCheckoutStep('processing');
-        // Simulate API call
-        setTimeout(() => {
-            setCheckoutStep('success');
-            const newOrders = cart.map(item => ({
-                id: `ORD-2024-${Math.floor(Math.random() * 1000)}`,
+        try {
+            const result = await marketOrderService.createCheckout(cart, paymentMethod);
+            const newOrders = cart.map((item, index) => ({
+                id: result.orderIds[index] ?? `ORD-${Date.now() + index}`,
                 product: item.productName,
                 supplier: item.b2bSupplier,
                 value: item.price * item.quantity,
-                status: 'Aguardando Envio'
+                status: 'Aguardando Envio',
+                date: new Date().toLocaleDateString('pt-BR'),
             }));
             setOrders([...newOrders, ...orders]);
             setCart([]);
-            addToast({ type: 'success', title: 'Pagamento Confirmado', message: 'Ordem de compra gerada e valor em Escrow.', duration: 5000 });
-        }, 2000);
+            setLastTransactionId(result.transactionId);
+            setCheckoutStep('success');
+            addToast({ type: 'success', title: 'Pagamento Confirmado', message: 'Ordem de compra gravada e valor protegido em Escrow.', duration: 5000 });
+        } catch (error) {
+            setCheckoutStep('payment');
+            addToast({
+                type: 'error',
+                title: 'Falha no pagamento',
+                message: error instanceof Error ? error.message : 'Nao foi possivel registrar a compra no banco de dados.',
+                duration: 5000,
+            });
+        }
     };
 
     const closeCheckout = () => {
@@ -480,7 +493,7 @@ const CommercialView: React.FC = () => {
                                     </p>
                                     <div className="bg-slate-50 p-4 rounded-lg w-full mb-6 text-left border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-2">Resumo</p>
-                                        <p className="text-sm flex justify-between mb-1"><span>ID da Transação:</span> <span className="font-mono">TRX-{Math.floor(Math.random() * 10000)}</span></p>
+                                        <p className="text-sm flex justify-between mb-1"><span>ID da Transação:</span> <span className="font-mono">{lastTransactionId ?? 'TRX-N/A'}</span></p>
                                         <p className="text-sm flex justify-between mb-1">
                                             <span>Método:</span> 
                                             <span className="font-bold text-slate-700">

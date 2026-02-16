@@ -10,6 +10,8 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import { managementService } from '../../../services/managementService';
 import { propertyService } from '../../../services/propertyService';
 import { stockService } from '../../../services/stockService';
+import { useToast } from '../../../contexts/ToastContext';
+import { producerOpsService } from '../../../services/producerOpsService';
 
 const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void }> = ({ alert, onResolve }) => {
     const severityColors: Record<ManagementAlert['severity'], string> = {
@@ -21,7 +23,7 @@ const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void
     return (
         <div className={`flex items-center justify-between p-3 mb-2 rounded-md border-l-4 shadow-sm bg-white ${severityColors[alert.severity]} transition-all hover:shadow-md`}>
             <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase opacity-80">{alert.type === 'Nutrition' ? 'Nutricao' : alert.type === 'Health' ? 'Sanidade' : 'Agricultura'} • {alert.dueDate}</span>
+                <span className="text-xs font-bold uppercase opacity-80">{alert.type === 'Nutrition' ? 'Nutricao' : alert.type === 'Health' ? 'Sanidade' : 'Agricultura'} - {alert.dueDate}</span>
                 <span className="font-bold text-sm md:text-base">{alert.message}</span>
                 <span className="text-xs mt-0.5">Local: {alert.target}</span>
             </div>
@@ -36,6 +38,7 @@ const CompactAlertItem: React.FC<{ alert: ManagementAlert, onResolve: () => void
 };
 
 const ManagementView: React.FC = () => {
+    const { addToast } = useToast();
     const [projects, setProjects] = useState<ProductionProject[]>([]);
     const [history, setHistory] = useState<ManagementRecord[]>([]);
     const [alerts, setAlerts] = useState<ManagementAlert[]>([]);
@@ -83,6 +86,7 @@ const ManagementView: React.FC = () => {
         target: '',
         product: '',
         quantity: '',
+        estimatedCost: '',
     });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -100,38 +104,50 @@ const ManagementView: React.FC = () => {
         setForm({
             target: alert.target,
             product: '', 
-            quantity: ''
+            quantity: '',
+            estimatedCost: '',
         });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.target || !form.product || !form.quantity) return;
 
-        const newRecord: ManagementRecord = {
-            id: `HIST-${Date.now()}`,
-            date: new Date().toLocaleDateString('pt-BR'),
-            target: form.target,
-            actionType: activeTab,
-            product: form.product,
-            quantity: form.quantity,
-            executor: 'Eu',
-        };
-
-        setHistory([newRecord, ...history]);
-        setForm({ target: '', product: '', quantity: '' });
-        
-        const btn = document.getElementById('submit-btn');
-        if(btn) {
-            const originalText = btn.innerText;
-            btn.innerText = 'Registrado!';
-            btn.classList.add('bg-green-600');
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.classList.remove('bg-green-600');
-            }, 1500);
+        try {
+            const newRecord = await managementService.createHistoryRecord({
+                target: form.target,
+                actionType: activeTab,
+                product: form.product,
+                quantity: form.quantity,
+                executor: "Eu",
+            });
+            const operationalActivity = await producerOpsService.createActivity({
+                title: `Manejo registrado: ${activeTab}`,
+                details: `${form.product} em ${form.target} (${form.quantity})`,
+                actor: 'Administrador',
+                actorRole: 'ADMINISTRADOR',
+            });
+            if (Number(form.estimatedCost) > 0) {
+                await producerOpsService.createExpense({
+                    description: `Manejo ${activeTab}: ${form.product}`,
+                    category: 'OPERACIONAL',
+                    amount: Number(form.estimatedCost),
+                    source: 'ADMINISTRADOR',
+                    relatedActivityId: operationalActivity.id,
+                });
+            }
+            const relatedAlert = alerts.find((alert) => alert.target === form.target);
+            if (relatedAlert) {
+                await managementService.resolveAlert(relatedAlert.id);
+                setAlerts((prev) => prev.filter((alert) => alert.id !== relatedAlert.id));
+            }
+            setHistory((prev) => [newRecord, ...prev]);
+            setForm({ target: "", product: "", quantity: "", estimatedCost: '' });
+            addToast({ type: "success", title: "Manejo registrado", message: "A operacao foi salva com sucesso." });
+        } catch {
+            addToast({ type: "error", title: "Falha ao salvar", message: "Nao foi possivel persistir o registro de manejo." });
         }
     };
 
@@ -241,6 +257,18 @@ const ManagementView: React.FC = () => {
                         />
                     </div>
 
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Custo da Operacao (R$)</label>
+                        <input
+                            type="number"
+                            name="estimatedCost"
+                            value={form.estimatedCost}
+                            onChange={handleInputChange}
+                            placeholder="Ex: 350.00"
+                            className="w-full p-3 border border-slate-200 rounded-lg text-lg font-semibold text-slate-800 placeholder-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                    </div>
+
                     <button 
                         id="submit-btn"
                         type="submit" 
@@ -265,7 +293,7 @@ const ManagementView: React.FC = () => {
                                     }`}></div>
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">{record.actionType} <span className="font-normal text-slate-500">em</span> {record.target}</p>
-                                        <p className="text-xs text-slate-500">{record.product} • {record.quantity}</p>
+                                        <p className="text-xs text-slate-500">{record.product} - {record.quantity}</p>
                                     </div>
                                 </div>
                                 <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">{record.date}</span>

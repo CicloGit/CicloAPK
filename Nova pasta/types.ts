@@ -628,6 +628,72 @@ export interface CarbonCredit {
     certificateHash: string;
 }
 
+export interface ProducerAnimalLot {
+    id: string;
+    name: string;
+    category: string;
+    headcount: number;
+    averageWeightKg: number;
+    createdAt: string;
+}
+
+export interface ProducerInput {
+    id: string;
+    name: string;
+    inputType: ProducerInputType;
+    applicationArea: ProducerApplicationArea;
+    targetSpecies: ProducerTargetSpecies[];
+    unit: string;
+    unitCost: number;
+    stock: number;
+    createdAt: string;
+}
+
+export type ProducerInputType =
+    | 'ADUBO'
+    | 'RACAO'
+    | 'SAL_MINERAL'
+    | 'MEDICAMENTO'
+    | 'SEMENTE'
+    | 'DEFENSIVO'
+    | 'OUTRO';
+
+export type ProducerApplicationArea =
+    | 'PASTAGEM'
+    | 'LAVOURA'
+    | 'CONFINAMENTO'
+    | 'AVIARIO'
+    | 'CURRAL'
+    | 'GERAL';
+
+export type ProducerTargetSpecies =
+    | 'BOVINOS'
+    | 'AVES'
+    | 'SUINOS'
+    | 'OVINOS'
+    | 'CAPRINOS'
+    | 'EQUINOS';
+
+export interface ProducerExpense {
+    id: string;
+    description: string;
+    category: 'OPERACIONAL' | 'INSUMO' | 'MANUTENCAO' | 'PESSOAL' | 'OUTROS';
+    amount: number;
+    date: string;
+    source: 'OPERADOR' | 'ADMINISTRADOR' | 'SISTEMA';
+    relatedActivityId?: string;
+}
+
+export interface ProducerOperationalActivity {
+    id: string;
+    title: string;
+    details: string;
+    actor: string;
+    actorRole: 'OPERADOR' | 'ADMINISTRADOR';
+    date: string;
+    relatedLotId?: string;
+}
+
 // --- SUPPLIER PORTAL ERP ---
 export type SupplierOrderStatus = 'PENDENTE' | 'ENVIADO' | 'ENTREGUE';
 

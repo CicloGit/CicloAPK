@@ -66,6 +66,9 @@ const IntegratorDashboard: React.FC = () => {
     const [producers, setProducers] = useState<IntegratedProducer[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [targetStage, setTargetStage] = useState('Todos');
+    const [demandTitle, setDemandTitle] = useState('');
+    const [demandDescription, setDemandDescription] = useState('');
+    const [demandType, setDemandType] = useState<PartnershipOffer['type']>('Compra Garantida');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -104,6 +107,28 @@ const IntegratorDashboard: React.FC = () => {
             setNewMessage('');
         } catch {
             setLoadError('Nao foi possivel enviar a mensagem.');
+        }
+    };
+
+    const handleCreateDemand = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!demandTitle.trim() || !demandDescription.trim()) {
+            setLoadError('Informe titulo e descricao da demanda.');
+            return;
+        }
+        try {
+            const created = await integratorService.createDemand({
+                title: demandTitle.trim(),
+                description: demandDescription.trim(),
+                type: demandType,
+            });
+            setOffers((prev) => [created, ...prev]);
+            setDemandTitle('');
+            setDemandDescription('');
+            setDemandType('Compra Garantida');
+            setLoadError(null);
+        } catch {
+            setLoadError('Nao foi possivel criar a demanda de compra.');
         }
     };
 
@@ -194,7 +219,7 @@ const IntegratorDashboard: React.FC = () => {
                                 {filteredProducers.map(producer => (
                                     <div key={producer.id} className="border border-slate-200 rounded-xl p-5 hover:shadow-lg transition-all bg-white relative overflow-hidden group">
                                         {/* Status Strip */}
-                                        <div className={`absolute top-0 left-0 w-1 h-full ${producer.status === 'Disponivel' ? 'bg-emerald-500' : producer.status === 'Contratado' ? 'bg-slate-400' : 'bg-amber-500'}`}></div>
+                                        <div className={`absolute top-0 left-0 w-1 h-full ${producer.status === 'Disponível' ? 'bg-emerald-500' : producer.status === 'Contratado' ? 'bg-slate-400' : 'bg-amber-500'}`}></div>
                                         
                                         <div className="ml-3">
                                             <div className="flex justify-between items-start mb-3">
@@ -252,12 +277,36 @@ const IntegratorDashboard: React.FC = () => {
                     {/* DEMANDS TAB */}
                     {activeTab === 'Demands' && (
                         <div>
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold text-slate-800">Minhas Demandas de Compra</h3>
-                                <button className="flex items-center px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-semibold text-sm">
-                                    <PlusCircleIcon className="h-4 w-4 mr-2" />
-                                    Criar Nova Demanda
-                                </button>
+                            <div className="mb-6">
+                                <h3 className="text-xl font-bold text-slate-800 mb-4">Minhas Demandas de Compra</h3>
+                                <form onSubmit={handleCreateDemand} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                    <input
+                                        value={demandTitle}
+                                        onChange={(e) => setDemandTitle(e.target.value)}
+                                        placeholder="Titulo da demanda"
+                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm"
+                                    />
+                                    <input
+                                        value={demandDescription}
+                                        onChange={(e) => setDemandDescription(e.target.value)}
+                                        placeholder="Descricao"
+                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm"
+                                    />
+                                    <select
+                                        value={demandType}
+                                        onChange={(e) => setDemandType(e.target.value as PartnershipOffer['type'])}
+                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm bg-white"
+                                    >
+                                        <option value="Compra Garantida">Compra Garantida</option>
+                                        <option value="Fomento (Insumos)">Fomento (Insumos)</option>
+                                        <option value="Integração Vertical">Integracao Vertical</option>
+                                        <option value="Parceria Estratégica">Parceria Estrategica</option>
+                                    </select>
+                                    <button type="submit" className="flex items-center justify-center px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-semibold text-sm">
+                                        <PlusCircleIcon className="h-4 w-4 mr-2" />
+                                        Criar Nova Demanda
+                                    </button>
+                                </form>
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 {offers.map(offer => (

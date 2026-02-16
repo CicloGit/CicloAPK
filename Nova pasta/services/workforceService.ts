@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { mockEmployees, mockPayroll, mockPPEOrders, mockTimeRecords } from '../constants';
 import { db } from '../config/firebase';
+import { parseDateToTimestamp } from './dateUtils';
 import { Employee, PayrollEntry, PPEOrder, TimeRecord } from '../types';
 
 const employeesCollection = collection(db, 'employees');
@@ -123,7 +124,7 @@ export const workforceService = {
     const snapshot = await getDocs(timeRecordsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toTimeRecord(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: TimeRecord, b: TimeRecord) => b.date.localeCompare(a.date));
+      .sort((a: TimeRecord, b: TimeRecord) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
   async listPayrollEntries(): Promise<PayrollEntry[]> {
@@ -131,7 +132,7 @@ export const workforceService = {
     const snapshot = await getDocs(payrollCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPayrollEntry(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: PayrollEntry, b: PayrollEntry) => b.dueDate.localeCompare(a.dueDate));
+      .sort((a: PayrollEntry, b: PayrollEntry) => parseDateToTimestamp(b.dueDate) - parseDateToTimestamp(a.dueDate));
   },
 
   async listPPEOrders(): Promise<PPEOrder[]> {
@@ -139,6 +140,18 @@ export const workforceService = {
     const snapshot = await getDocs(ppeOrdersCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPPEOrder(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: PPEOrder, b: PPEOrder) => b.date.localeCompare(a.date));
+      .sort((a: PPEOrder, b: PPEOrder) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
+  },
+
+  async updatePayrollStatus(entryId: string, status: PayrollEntry['status']): Promise<void> {
+    await ensureSeedData();
+    await setDoc(
+      doc(db, 'payrollEntries', entryId),
+      {
+        status,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   },
 };

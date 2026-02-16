@@ -169,7 +169,7 @@ export const legalService = {
   async listContracts(): Promise<LegalContract[]> {
     await ensureSeedData();
     const snapshot = await getDocs(contractsCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toContract(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
@@ -177,7 +177,7 @@ export const legalService = {
   async listLicenses(): Promise<LegalLicense[]> {
     await ensureSeedData();
     const snapshot = await getDocs(licensesCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toLicense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
@@ -185,7 +185,7 @@ export const legalService = {
   async listComplianceAlerts(): Promise<LegalComplianceAlert[]> {
     await ensureSeedData();
     const snapshot = await getDocs(complianceCollection);
-    return snapshot.docs.map((docSnapshot) =>
+    return snapshot.docs.map((docSnapshot: any) =>
       toAlert(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },

@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { mockAnimalDetails } from '../constants';
 import { db } from '../config/firebase';
+import { parseDateToTimestamp } from './dateUtils';
 import { AnimalProductionDetails, Contract } from '../types';
 
 const contractsCollection = collection(db, 'contracts');
@@ -66,6 +67,6 @@ export const contractsService = {
     const snapshot = await getDocs(contractsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toContract(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
-      .sort((a: Contract, b: Contract) => a.deadline.localeCompare(b.deadline));
+      .sort((a: Contract, b: Contract) => parseDateToTimestamp(a.deadline) - parseDateToTimestamp(b.deadline));
   },
 };

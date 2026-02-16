@@ -12,6 +12,8 @@ import { useToast } from '../../../contexts/ToastContext';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { operatorService } from '../../../services/operatorService';
 import { financialService } from '../../../services/financialService';
+import { fieldOperationsService } from '../../../services/fieldOperationsService';
+import { producerOpsService } from '../../../services/producerOpsService';
 
 const OperatorPortalView: React.FC = () => {
     const { addToast } = useToast();
@@ -31,6 +33,7 @@ const OperatorPortalView: React.FC = () => {
     // Diary State
     const [isRecording, setIsRecording] = useState(false);
     const [mediaAttached, setMediaAttached] = useState<'AUDIO' | 'PHOTO' | null>(null);
+    const [diaryNote, setDiaryNote] = useState('');
 
     // Clock State
     const [clockStatus, setClockStatus] = useState<'IDLE' | 'WORKING' | 'BREAK'>('IDLE');
@@ -99,6 +102,12 @@ const OperatorPortalView: React.FC = () => {
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: action } : t));
         try {
             await operatorService.updateTaskStatus(taskId, action);
+            await producerOpsService.createActivity({
+                title: action === 'COMPLETED' ? 'Tarefa concluida pelo operador' : 'Tarefa rejeitada pelo operador',
+                details: `Task ${taskId}`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
+            });
             addToast({ type: 'success', title: 'Tarefa Atualizada', message: `Status alterado para ${action === 'COMPLETED' ? 'Concluido' : 'Rejeitado'}.` });
         } catch {
             addToast({ type: 'error', title: 'Falha', message: 'Nao foi possivel atualizar a tarefa.' });
@@ -118,6 +127,12 @@ const OperatorPortalView: React.FC = () => {
                 requester: 'Jose (Eu)',
             });
             setMyRequests((prev) => [newReq, ...prev]);
+            await producerOpsService.createActivity({
+                title: 'Solicitacao de compra criada',
+                details: `${requestItem} (${requestQty || 'sem quantidade'})`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
+            });
             setRequestItem('');
             setRequestQty('');
             addToast({ type: 'success', title: 'Solicitacao Enviada', message: 'O pedido foi encaminhado para aprovacao do gestor.' });
@@ -141,9 +156,31 @@ const OperatorPortalView: React.FC = () => {
         addToast({ type: 'success', title: 'Foto Capturada', message: 'Imagem anexada ao diario.' });
     };
 
-    const sendDiaryEntry = () => {
-        setMediaAttached(null);
-        addToast({ type: 'success', title: 'Diario Enviado', message: 'Relato salvo. A transcricao automatica iniciara em breve.' });
+    const sendDiaryEntry = async () => {
+        if (!mediaAttached) {
+            return;
+        }
+        try {
+            await fieldOperationsService.createDiaryEntry({
+                author: 'Jose',
+                role: 'Operador',
+                location: 'Campo',
+                type: mediaAttached,
+                transcript: diaryNote.trim() || `Relato enviado com mídia ${mediaAttached}.`,
+                aiAction: mediaAttached === 'AUDIO' ? 'Transcricao pendente' : undefined,
+            });
+            await producerOpsService.createActivity({
+                title: 'Diario de campo enviado',
+                details: diaryNote.trim() || `Midia ${mediaAttached}`,
+                actor: 'Operador',
+                actorRole: 'OPERADOR',
+            });
+            setMediaAttached(null);
+            setDiaryNote('');
+            addToast({ type: 'success', title: 'Diario Enviado', message: 'Relato salvo no banco de dados.' });
+        } catch {
+            addToast({ type: 'error', title: 'Falha no diario', message: 'Nao foi possivel salvar o relato de campo.' });
+        }
     };
 
     const handleClockAction = (action: 'START' | 'BREAK' | 'STOP') => {
@@ -282,6 +319,14 @@ const OperatorPortalView: React.FC = () => {
                                 <button onClick={() => setMediaAttached(null)} className="text-red-500"><XIcon className="h-5 w-5"/></button>
                             </div>
                         )}
+
+                        <textarea
+                            value={diaryNote}
+                            onChange={(e) => setDiaryNote(e.target.value)}
+                            placeholder="Descreva o ocorrido (opcional)"
+                            className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
+                            rows={3}
+                        />
 
                         <button 
                             onClick={sendDiaryEntry}

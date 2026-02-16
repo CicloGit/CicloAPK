@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -13,6 +14,7 @@ import { ProductionProject } from '../types';
 
 export interface LiveHandlingEntry {
   id: string;
+  projectId: string;
   entityId: string;
   value: string;
   action: string;
@@ -28,6 +30,7 @@ const seedHistory: LiveHandlingEntry[] = [];
 
 const toHistory = (id: string, raw: Record<string, unknown>): LiveHandlingEntry => ({
   id,
+  projectId: String(raw.projectId ?? ''),
   entityId: String(raw.entityId ?? ''),
   value: String(raw.value ?? ''),
   action: String(raw.action ?? ''),
@@ -93,8 +96,28 @@ export const liveHandlingService = {
 
   async listHistory(): Promise<LiveHandlingEntry[]> {
     await ensureSeedData();
-    const snapshot = await getDocs(historyCollection);
+    const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+  },
+
+  async createEntry(payload: Omit<LiveHandlingEntry, 'id' | 'time'>): Promise<LiveHandlingEntry> {
+    await ensureSeedData();
+    const newEntry: LiveHandlingEntry = {
+      id: `LIVE-${Date.now()}`,
+      projectId: payload.projectId,
+      entityId: payload.entityId,
+      value: payload.value,
+      action: payload.action,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    await setDoc(doc(db, 'liveHandlingHistory', newEntry.id), {
+      ...newEntry,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newEntry;
   },
 };
