@@ -2,15 +2,12 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
   orderBy,
-  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { mockAuditEvents, mockInventoryItems, mockStockMovements } from '../constants';
 import { AuditChain } from '../lib/auditChain';
 import { RulesEngine, hasSufficientStock } from '../lib/rulesEngine';
 import { db } from '../config/firebase';
@@ -19,8 +16,6 @@ import { AuditEvent, InventoryItem, StockMovement } from '../types';
 const inventoryCollection = collection(db, 'inventoryItems');
 const movementCollection = collection(db, 'stockMovements');
 const auditCollection = collection(db, 'auditEvents');
-
-let seeded = false;
 
 const todayBR = () => new Date().toLocaleDateString('pt-BR');
 
@@ -63,63 +58,22 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
   proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const inventorySnapshot = await getDocs(query(inventoryCollection, limit(1)));
-  if (!inventorySnapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockInventoryItems.map((item) =>
-      setDoc(doc(db, 'inventoryItems', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockStockMovements.map((movement) =>
-      setDoc(doc(db, 'stockMovements', movement.id), {
-        ...movement,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockAuditEvents.map((auditEvent) =>
-      setDoc(doc(db, 'auditEvents', auditEvent.id), {
-        ...auditEvent,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 async function getLatestAuditEvent(): Promise<AuditEvent | null> {
-  const auditSnapshot = await getDocs(query(auditCollection, orderBy('createdAt', 'desc'), limit(1)));
+  const auditSnapshot = await getDocs(auditCollection);
   if (auditSnapshot.empty) {
     return null;
   }
 
-  const docSnapshot = auditSnapshot.docs[0];
+  const docSnapshot = auditSnapshot.docs.sort((left: any, right: any) => {
+    const leftCreatedAt = left.get('createdAt')?.seconds ?? 0;
+    const rightCreatedAt = right.get('createdAt')?.seconds ?? 0;
+    return rightCreatedAt - leftCreatedAt;
+  })[0];
   return toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
 }
 
 export const stockService = {
   async listInventory(): Promise<InventoryItem[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(inventoryCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toInventoryItem(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -127,8 +81,7 @@ export const stockService = {
   },
 
   async listMovements(): Promise<StockMovement[]> {
-    await ensureSeedData();
-    const snapshot = await getDocs(query(movementCollection, orderBy('createdAt', 'desc')));
+    const snapshot = await getDocs(movementCollection);
     return snapshot.docs.map((docSnapshot: any) => toStockMovement(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
@@ -136,8 +89,6 @@ export const stockService = {
     data: { itemId: string; quantity: number; reason: string; proofUrl: string; requester: string }
   ): Promise<{ success: boolean; message?: string; newMovement?: StockMovement; auditEvent?: AuditEvent }> {
     try {
-      await ensureSeedData();
-
       const itemRef = doc(db, 'inventoryItems', data.itemId);
       const lastAuditEvent = await getLatestAuditEvent();
       const previousHash = lastAuditEvent ? lastAuditEvent.hash : '0'.repeat(64);
@@ -223,8 +174,6 @@ export const stockService = {
     invoiceNumber: string
   ): Promise<{ success: boolean; message?: string; updatedMovement?: StockMovement }> {
     try {
-      await ensureSeedData();
-
       const movementRef = doc(db, 'stockMovements', movementId);
       const movements = await this.listMovements();
       const movement = movements.find((entry) => entry.id === movementId);
@@ -273,7 +222,6 @@ export const stockService = {
   },
 
   async appendStockMovement(movement: StockMovement): Promise<void> {
-    await ensureSeedData();
     await setDoc(
       doc(db, 'stockMovements', movement.id),
       {
@@ -286,7 +234,6 @@ export const stockService = {
   },
 
   async updateMovementStatus(movementId: string, status: StockMovement['status']): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'stockMovements', movementId), { status, updatedAt: serverTimestamp() });
   },
 };

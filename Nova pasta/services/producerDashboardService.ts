@@ -3,18 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
 } from 'firebase/firestore';
-import {
-  mockAnimalDetails,
-  mockFinancialDetails,
-  mockProjectStages,
-  mockSectorDetails,
-  mockStageDetails,
-} from '../constants';
 import { db } from '../config/firebase';
 import {
   AnimalProductionDetails,
@@ -30,8 +19,6 @@ const sectorDetailsCollection = collection(db, 'sectorDetails');
 const stageDetailsCollection = collection(db, 'stageDetails');
 const projectStagesCollection = collection(db, 'projectStages');
 const auditEventsCollection = collection(db, 'auditEvents');
-
-let seeded = false;
 
 const toFinancialDetails = (id: string, raw: Record<string, unknown>): FinancialDetails => ({
   projectId: String(raw.projectId ?? id),
@@ -80,78 +67,8 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
   proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(financialDetailsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    Object.entries(mockFinancialDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'financialDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockAnimalDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'animalDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockSectorDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'sectorDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockStageDetails).map(([stageId, details]) =>
-      setDoc(doc(db, 'stageDetails', stageId), {
-        ...details,
-        stageId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockProjectStages).map(([projectId, stages]) =>
-      setDoc(doc(db, 'projectStages', projectId), {
-        projectId,
-        stages,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {
-    await ensureSeedData();
     const snapshot = await getDocs(financialDetailsCollection);
     const mapped: Record<string, FinancialDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -162,7 +79,6 @@ export const producerDashboardService = {
   },
 
   async listAnimalDetails(): Promise<Record<string, AnimalProductionDetails>> {
-    await ensureSeedData();
     const snapshot = await getDocs(animalDetailsCollection);
     const mapped: Record<string, AnimalProductionDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -173,7 +89,6 @@ export const producerDashboardService = {
   },
 
   async listSectorDetails(): Promise<Record<string, SectorSpecificData>> {
-    await ensureSeedData();
     const snapshot = await getDocs(sectorDetailsCollection);
     const mapped: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -184,7 +99,6 @@ export const producerDashboardService = {
   },
 
   async listStageDetails(): Promise<Record<string, SectorSpecificData>> {
-    await ensureSeedData();
     const snapshot = await getDocs(stageDetailsCollection);
     const mapped: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -195,7 +109,6 @@ export const producerDashboardService = {
   },
 
   async listProjectStages(): Promise<Record<string, ProjectStage[]>> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectStagesCollection);
     const mapped: Record<string, ProjectStage[]> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -205,13 +118,11 @@ export const producerDashboardService = {
   },
 
   async listAuditEvents(): Promise<AuditEvent[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(auditEventsCollection);
     return snapshot.docs.map((docSnapshot: any) => toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async getStageDetails(stageId: string): Promise<SectorSpecificData | null> {
-    await ensureSeedData();
     const snapshot = await getDoc(doc(db, 'stageDetails', stageId));
     if (!snapshot.exists()) {
       return null;

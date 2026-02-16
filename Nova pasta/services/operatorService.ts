@@ -2,20 +2,15 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { mockOperatorRequests, mockOperatorTasks } from '../constants';
 import { db } from '../config/firebase';
 import { OperatorRequest, OperatorTask } from '../types';
 
 const requestsCollection = collection(db, 'operatorRequests');
 const tasksCollection = collection(db, 'operatorTasks');
-
-let seeded = false;
 
 const toOperatorRequest = (id: string, raw: Record<string, unknown>): OperatorRequest => ({
   id,
@@ -39,57 +34,20 @@ const toOperatorTask = (id: string, raw: Record<string, unknown>): OperatorTask 
   geolocation: String(raw.geolocation ?? ''),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(tasksCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockOperatorTasks.map((task) =>
-      setDoc(doc(db, 'operatorTasks', task.id), {
-        ...task,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockOperatorRequests.map((request) =>
-      setDoc(doc(db, 'operatorRequests', request.id), {
-        ...request,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 export const operatorService = {
   async listTasks(): Promise<OperatorTask[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(tasksCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toOperatorTask(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listRequests(): Promise<OperatorRequest[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(requestsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toOperatorRequest(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async createRequest(data: Pick<OperatorRequest, 'type' | 'item' | 'quantity' | 'priority' | 'requester'>): Promise<OperatorRequest> {
-    await ensureSeedData();
     const newRequest: OperatorRequest = {
       id: `REQ-${Date.now()}`,
       type: data.type,
@@ -111,7 +69,6 @@ export const operatorService = {
   },
 
   async updateTaskStatus(taskId: string, status: OperatorTask['status']): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'operatorTasks', taskId), {
       status,
       updatedAt: serverTimestamp(),
@@ -119,7 +76,6 @@ export const operatorService = {
   },
 
   async updateRequestStatus(requestId: string, status: OperatorRequest['status']): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'operatorRequests', requestId), {
       status,
       updatedAt: serverTimestamp(),

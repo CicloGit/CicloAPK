@@ -1,0 +1,165 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Ciclo+ Agro Backend API",
+    "version": "1.0.0",
+    "description": "API REST modular para operacao agro com Firebase real"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "roleHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-role"
+      },
+      "userHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-id"
+      }
+    }
+  },
+  "security": [
+    {
+      "roleHeader": [],
+      "userHeader": []
+    }
+  ],
+  "paths": {
+    "/healthcheck": {
+      "get": {
+        "summary": "Healthcheck com escrita e leitura real no Firestore"
+      }
+    },
+    "/farms": {
+      "post": {
+        "summary": "Criar fazenda"
+      }
+    },
+    "/farms/{farmId}/locals": {
+      "post": {
+        "summary": "Criar local (lote/pasto)"
+      }
+    },
+    "/farms/{farmId}/evidences/upload": {
+      "post": {
+        "summary": "Upload de evidencia para Storage"
+      }
+    },
+    "/farms/{farmId}/animals": {
+      "post": {
+        "summary": "Criar animal"
+      }
+    },
+    "/farms/{farmId}/animals/birth": {
+      "post": {
+        "summary": "Registrar nascimento"
+      }
+    },
+    "/farms/{farmId}/animals/purchase": {
+      "post": {
+        "summary": "Registrar compra"
+      }
+    },
+    "/farms/{farmId}/animals/{animalId}/stage": {
+      "post": {
+        "summary": "Alterar estagio do animal com politicas de conferencia e pesagem"
+      }
+    },
+    "/farms/{farmId}/transfers": {
+      "post": {
+        "summary": "Transferir animal entre locais"
+      }
+    },
+    "/farms/{farmId}/conferences/open": {
+      "post": {
+        "summary": "Abrir conferencia"
+      }
+    },
+    "/farms/{farmId}/conferences/{id}/count": {
+      "post": {
+        "summary": "Registrar contagem da conferencia"
+      }
+    },
+    "/farms/{farmId}/conferences/{id}/approve": {
+      "post": {
+        "summary": "Aprovar conferencia"
+      }
+    },
+    "/farms/{farmId}/conferences/{id}/reject": {
+      "post": {
+        "summary": "Reprovar conferencia"
+      }
+    },
+    "/farms/{farmId}/stock/items": {
+      "post": {
+        "summary": "Cadastrar item de estoque/insumo"
+      }
+    },
+    "/farms/{farmId}/stock/in": {
+      "post": {
+        "summary": "Entrada de estoque"
+      }
+    },
+    "/farms/{farmId}/stock/consume": {
+      "post": {
+        "summary": "Consumo de estoque"
+      }
+    },
+    "/farms/{farmId}/invoices/in": {
+      "post": {
+        "summary": "Registrar NF de entrada e aplicar no estoque/rebanho"
+      }
+    },
+    "/farms/{farmId}/feed": {
+      "post": {
+        "summary": "Lancamento de alimentacao"
+      }
+    },
+    "/farms/{farmId}/health": {
+      "post": {
+        "summary": "Lancamento de sanidade"
+      }
+    },
+    "/farms/{farmId}/weighings": {
+      "post": {
+        "summary": "Registrar pesagem e indicadores"
+      }
+    },
+    "/farms/{farmId}/sales/orders": {
+      "post": {
+        "summary": "Criar ordem de venda"
+      }
+    },
+    "/farms/{farmId}/sales/orders/{id}/issue": {
+      "post": {
+        "summary": "Emitir venda e NF de saida"
+      }
+    },
+    "/farms/{farmId}/reports/locks": {
+      "get": {
+        "summary": "Relatorio de travas ativas"
+      }
+    },
+    "/farms/{farmId}/reports/balance-by-local": {
+      "get": {
+        "summary": "Saldo por local"
+      }
+    },
+    "/farms/{farmId}/reports/gmd-by-lot": {
+      "get": {
+        "summary": "GMD por lote"
+      }
+    },
+    "/farms/{farmId}/reports/consumption-by-lot": {
+      "get": {
+        "summary": "Consumo por lote"
+      }
+    }
+  }
+}

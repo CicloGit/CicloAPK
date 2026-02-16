@@ -57,40 +57,15 @@ const toDiaryEntry = (id: string, raw: Record<string, unknown>): FieldDiaryEntry
   aiAction: raw.aiAction ? String(raw.aiAction) : undefined,
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(diaryCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedEntries.map((entry) =>
-      setDoc(doc(db, 'fieldDiaryEntries', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const fieldOperationsService = {
   async listDiaryEntries(): Promise<FieldDiaryEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(diaryCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toDiaryEntry(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async createDiaryEntry(payload: Omit<FieldDiaryEntry, 'id' | 'date'>): Promise<FieldDiaryEntry> {
-    await ensureSeedData();
     const newEntry: FieldDiaryEntry = {
       id: `FD-${Date.now()}`,
       author: payload.author,

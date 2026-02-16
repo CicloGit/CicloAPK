@@ -3,12 +3,9 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { mockBankAccounts, mockExpenses, mockReceivables, mockTransactions } from '../constants';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { BankAccount, Expense, Receivable, Transaction } from '../types';
@@ -17,8 +14,6 @@ const accountCollection = collection(db, 'bankAccounts');
 const receivableCollection = collection(db, 'receivables');
 const expenseCollection = collection(db, 'expenses');
 const transactionCollection = collection(db, 'transactions');
-
-let seeded = false;
 
 export const financialSplitConfig = {
   platformFeeRate: 0.05,
@@ -81,63 +76,8 @@ const toTransaction = (id: string, raw: Record<string, unknown>): Transaction =>
   documentUrl: raw.documentUrl ? String(raw.documentUrl) : undefined,
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const receivableSnapshot = await getDocs(query(receivableCollection, limit(1)));
-  if (!receivableSnapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockReceivables.map((item) =>
-      setDoc(doc(db, 'receivables', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockExpenses.map((item) =>
-      setDoc(doc(db, 'expenses', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.values(mockBankAccounts).map((item) =>
-      setDoc(doc(db, 'bankAccounts', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockTransactions.map((item) =>
-      setDoc(doc(db, 'transactions', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 export const financialService = {
   async listReceivables(): Promise<Receivable[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(receivableCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toReceivable(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -145,7 +85,6 @@ export const financialService = {
   },
 
   async listExpenses(): Promise<Expense[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(expenseCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toExpense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -153,7 +92,6 @@ export const financialService = {
   },
 
   async listBankAccounts(): Promise<BankAccount[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(accountCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toBankAccount(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -161,7 +99,6 @@ export const financialService = {
   },
 
   async listTransactions(accountId?: string): Promise<Transaction[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(transactionCollection);
     const allItems: Transaction[] = snapshot.docs.map((docSnapshot: any) =>
       toTransaction(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
@@ -172,7 +109,6 @@ export const financialService = {
   },
 
   async getReceivableById(receivableId: string): Promise<Receivable | null> {
-    await ensureSeedData();
     const snapshot = await getDoc(doc(db, 'receivables', receivableId));
     if (!snapshot.exists()) {
       return null;
@@ -181,7 +117,6 @@ export const financialService = {
   },
 
   async markReceivableAsLiquidated(receivableId: string): Promise<void> {
-    await ensureSeedData();
     await setDoc(
       doc(db, 'receivables', receivableId),
       {

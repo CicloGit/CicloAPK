@@ -1,19 +1,4 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import {
-  mockPropertyData,
-  mockProductionProjects,
-  mockAnimalDetails,
-} from '../constants';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Property, Pasture, ProductionProject, PastureManagementHistoryItem } from '../types';
 import { Validators, ValidationResult } from '../lib/validators';
 import { db } from '../config/firebase';
@@ -23,22 +8,44 @@ const propertyCollection = collection(db, 'properties');
 const pastureCollection = collection(db, 'pastures');
 const projectCollection = collection(db, 'productionProjects');
 
-const DEFAULT_PROPERTY_ID = mockPropertyData.id;
+const DEFAULT_PROPERTY_ID = 'PROP-DEFAULT';
 const DEFAULT_MANUAL_DELETE_PASSWORD = 'CICLO123';
 const configuredDeletePassword = String(import.meta.env.VITE_MANUAL_DELETE_PASSWORD ?? '').trim();
 const AUTHORIZED_DELETE_PASSWORDS = [DEFAULT_MANUAL_DELETE_PASSWORD, configuredDeletePassword]
   .map((entry) => entry.trim().toLowerCase())
   .filter((entry, index, all) => Boolean(entry) && all.indexOf(entry) === index);
-let seeded = false;
+
+const getDefaultProperty = (propertyId: string = DEFAULT_PROPERTY_ID): Property => ({
+  id: propertyId,
+  name: '',
+  carNumber: '',
+  totalArea: 0,
+  currentStockingCapacity: 0,
+  animalCount: 0,
+  pastureManagementHistory: [],
+  pastureInvestmentPerHa: 0,
+  cattleInvestmentPerHa: 0,
+  infrastructure: [],
+  machinery: [],
+  perimeter: [],
+  satelliteImageUrl: undefined,
+});
 
 const toProperty = (id: string, raw: Record<string, unknown>): Property => ({
-  ...mockPropertyData,
-  ...raw,
+  ...getDefaultProperty(id),
   id,
+  name: String(raw.name ?? ''),
+  carNumber: String(raw.carNumber ?? ''),
+  totalArea: Number(raw.totalArea ?? 0),
+  currentStockingCapacity: Number(raw.currentStockingCapacity ?? 0),
+  animalCount: Number(raw.animalCount ?? 0),
   pastureManagementHistory: (raw.pastureManagementHistory as PastureManagementHistoryItem[]) ?? [],
-  perimeter: (raw.perimeter as { x: number; y: number }[]) ?? mockPropertyData.perimeter,
-  infrastructure: (raw.infrastructure as Property['infrastructure']) ?? mockPropertyData.infrastructure,
-  machinery: (raw.machinery as Property['machinery']) ?? mockPropertyData.machinery,
+  pastureInvestmentPerHa: Number(raw.pastureInvestmentPerHa ?? 0),
+  cattleInvestmentPerHa: Number(raw.cattleInvestmentPerHa ?? 0),
+  perimeter: (raw.perimeter as { x: number; y: number }[]) ?? [],
+  infrastructure: (raw.infrastructure as Property['infrastructure']) ?? [],
+  machinery: (raw.machinery as Property['machinery']) ?? [],
+  satelliteImageUrl: raw.satelliteImageUrl ? String(raw.satelliteImageUrl) : undefined,
 });
 
 const toPasture = (id: string, raw: Record<string, unknown>): Pasture => ({
@@ -77,12 +84,8 @@ const toProject = (id: string, raw: Record<string, unknown>): ProductionProject 
   limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
 });
 
-const isProjectDeleted = (raw: Record<string, unknown>): boolean => {
-  return Boolean(raw.isDeleted) || Boolean(raw.deletedAt);
-};
-
 const normalizePointToCanvas = (
-  points: { lat: string; long: string }[]
+  points: { lat: string; long: string }[],
 ): { x: number; y: number }[] => {
   const parsed = points.map((point) => ({
     lat: Number(point.lat),
@@ -121,85 +124,27 @@ const estimateAreaFromPoints = (points: { lat: string; long: string }[]): number
   return Number(Math.max(estimatedHectare, 1).toFixed(2));
 };
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const propertySnapshot = await getDoc(doc(db, 'properties', DEFAULT_PROPERTY_ID));
-  if (propertySnapshot.exists()) {
-    seeded = true;
-    return;
-  }
-
-  await setDoc(
-    doc(db, 'properties', DEFAULT_PROPERTY_ID),
-    {
-      ...mockPropertyData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  await Promise.all(
-    mockProductionProjects.map((project) =>
-      setDoc(
-        doc(db, 'productionProjects', project.id),
-        {
-          ...project,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      )
-    )
-  );
-
-  const seededPastures = Object.values(mockAnimalDetails).flatMap((detail) => detail.pastures);
-  await Promise.all(
-    seededPastures.map((pasture) =>
-      setDoc(
-        doc(db, 'pastures', pasture.id),
-        {
-          ...pasture,
-          propertyId: DEFAULT_PROPERTY_ID,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      )
-    )
-  );
-
-  seeded = true;
-}
+const isProjectDeleted = (raw: Record<string, unknown>): boolean => {
+  return Boolean(raw.isDeleted) || Boolean(raw.deletedAt);
+};
 
 export const propertyService = {
   getEmptyProperty(): Property {
-    return {
-      ...mockPropertyData,
-      pastureManagementHistory: [...mockPropertyData.pastureManagementHistory],
-      perimeter: [...(mockPropertyData.perimeter ?? [])],
-      infrastructure: [...(mockPropertyData.infrastructure ?? [])],
-      machinery: [...(mockPropertyData.machinery ?? [])],
-    };
+    return getDefaultProperty();
   },
 
   async loadWorkspace(
-    propertyId: string = DEFAULT_PROPERTY_ID
+    propertyId: string = DEFAULT_PROPERTY_ID,
   ): Promise<{ property: Property; activities: ProductionProject[]; pastures: Pasture[] }> {
-    await ensureSeedData();
-
     const [propertySnapshot, activitySnapshot, pastureSnapshot] = await Promise.all([
       getDoc(doc(db, 'properties', propertyId)),
       getDocs(projectCollection),
-      getDocs(query(pastureCollection, limit(300))),
+      getDocs(query(pastureCollection)),
     ]);
 
     const property = propertySnapshot.exists()
       ? toProperty(propertySnapshot.id, propertySnapshot.data() as Record<string, unknown>)
-      : mockPropertyData;
+      : getDefaultProperty(propertyId);
 
     const activities = activitySnapshot.docs
       .filter((docSnapshot: any) => !isProjectDeleted(docSnapshot.data() as Record<string, unknown>))
@@ -210,11 +155,7 @@ export const propertyService = {
       .map((docSnapshot: any) => toPasture(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: Pasture, b: Pasture) => a.name.localeCompare(b.name));
 
-    return {
-      property,
-      activities,
-      pastures,
-    };
+    return { property, activities, pastures };
   },
 
   async searchCAR(carInput: string): Promise<{ success: boolean; data?: unknown; message?: string }> {
@@ -240,8 +181,6 @@ export const propertyService = {
     if (!validation.success) {
       return { success: false, message: validation.error };
     }
-
-    await ensureSeedData();
 
     const { name, points } = divisionData;
     const polygonPoints = normalizePointToCanvas(points);
@@ -273,7 +212,7 @@ export const propertyService = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
 
     return { success: true, newPasture };
@@ -289,8 +228,6 @@ export const propertyService = {
     if (!validation.success) {
       return { success: false, message: validation.error };
     }
-
-    await ensureSeedData();
 
     const newProject: ProductionProject = {
       id: `PROJ-${Date.now()}`,
@@ -314,7 +251,7 @@ export const propertyService = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
 
     return { success: true, newProject };
@@ -326,14 +263,13 @@ export const propertyService = {
       return validation;
     }
 
-    await ensureSeedData();
     await setDoc(
       doc(db, 'properties', propertyData.id || DEFAULT_PROPERTY_ID),
       {
         ...propertyData,
         updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
 
     return validation;
@@ -349,7 +285,6 @@ export const propertyService = {
     }
 
     try {
-      await ensureSeedData();
       await deleteDoc(doc(db, 'productionProjects', activityId));
       return { success: true };
     } catch {
@@ -362,7 +297,7 @@ export const propertyService = {
             status: 'ENCERRADO',
             updatedAt: serverTimestamp(),
           },
-          { merge: true }
+          { merge: true },
         );
         return { success: true };
       } catch {

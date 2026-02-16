@@ -37,33 +37,9 @@ const seedConfigs: SystemConfigEntry[] = [
 
 let seeded = false;
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(configCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedConfigs.map((config) =>
-      setDoc(doc(db, 'systemConfigs', config.id), {
-        content: config.content,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const systemConfigService = {
   async listConfigs(): Promise<SystemConfigEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(configCollection);
     return snapshot.docs.map((docSnapshot: any) => ({
       id: docSnapshot.id as SystemConfigKey,

@@ -21,29 +21,6 @@ const seedNodes: ArchitectureNode[] = [
 
 let seeded = false;
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(architectureCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedNodes.map((node) =>
-      setDoc(doc(db, 'architectureNodes', node.id), {
-        ...node,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 const toArchitectureNode = (id: string, raw: Record<string, unknown>): ArchitectureNode => ({
   id,
@@ -61,7 +38,6 @@ const toArchitectureNode = (id: string, raw: Record<string, unknown>): Architect
 
 export const architectureService = {
   async listNodes(): Promise<ArchitectureNode[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(architectureCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toArchitectureNode(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)

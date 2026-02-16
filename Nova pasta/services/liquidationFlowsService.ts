@@ -15,29 +15,6 @@ const liquidationFlowsCollection = collection(db, 'liquidationFlows');
 
 let seeded = false;
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(liquidationFlowsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    liquidationFlows.map((flow, index) =>
-      setDoc(doc(db, 'liquidationFlows', `FLOW-${index + 1}`), {
-        ...flow,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 const toLiquidationFlow = (id: string, raw: Record<string, unknown>): LiquidationFlow => ({
   title: String(raw.title ?? id),
@@ -52,7 +29,6 @@ const toLiquidationFlow = (id: string, raw: Record<string, unknown>): Liquidatio
 
 export const liquidationFlowsService = {
   async listFlows(): Promise<LiquidationFlow[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(liquidationFlowsCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toLiquidationFlow(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)

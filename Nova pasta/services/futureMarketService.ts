@@ -1,21 +1,14 @@
 import {
   addDoc,
   collection,
-  doc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
-  setDoc,
 } from 'firebase/firestore';
-import { mockMarketOpportunities } from '../constants';
 import { db } from '../config/firebase';
 import { MarketOpportunity } from '../types';
 
 const opportunitiesCollection = collection(db, 'marketOpportunities');
 const locksCollection = collection(db, 'futureMarketLocks');
-
-let seeded = false;
 
 const toOpportunity = (id: string, raw: Record<string, unknown>): MarketOpportunity => ({
   id,
@@ -40,33 +33,8 @@ export interface FutureLockContract {
   createdAt: string;
 }
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(opportunitiesCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockMarketOpportunities.map((item) =>
-      setDoc(doc(db, 'marketOpportunities', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 export const futureMarketService = {
   async listOpportunities(): Promise<MarketOpportunity[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(opportunitiesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toOpportunity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -74,7 +42,6 @@ export const futureMarketService = {
   },
 
   async createLockContract(opportunity: MarketOpportunity, quantity: number): Promise<FutureLockContract> {
-    await ensureSeedData();
     const contract: Omit<FutureLockContract, 'id'> = {
       opportunityId: opportunity.id,
       commodity: opportunity.commodity,

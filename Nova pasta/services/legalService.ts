@@ -93,52 +93,6 @@ const seedAlerts: LegalComplianceAlert[] = [
 
 let seeded = false;
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(contractsCollection, limit(1)));
-  if (snapshot.empty) {
-    await Promise.all(
-      seedContracts.map((item) =>
-        setDoc(doc(db, 'legalContracts', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  const licenseSnapshot = await getDocs(query(licensesCollection, limit(1)));
-  if (licenseSnapshot.empty) {
-    await Promise.all(
-      seedLicenses.map((item) =>
-        setDoc(doc(db, 'legalLicenses', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  const complianceSnapshot = await getDocs(query(complianceCollection, limit(1)));
-  if (complianceSnapshot.empty) {
-    await Promise.all(
-      seedAlerts.map((item) =>
-        setDoc(doc(db, 'legalComplianceAlerts', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  seeded = true;
-}
 
 const toContract = (id: string, raw: Record<string, unknown>): LegalContract => ({
   id,
@@ -167,7 +121,6 @@ const toAlert = (id: string, raw: Record<string, unknown>): LegalComplianceAlert
 
 export const legalService = {
   async listContracts(): Promise<LegalContract[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(contractsCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toContract(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
@@ -175,7 +128,6 @@ export const legalService = {
   },
 
   async listLicenses(): Promise<LegalLicense[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(licensesCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toLicense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
@@ -183,7 +135,6 @@ export const legalService = {
   },
 
   async listComplianceAlerts(): Promise<LegalComplianceAlert[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(complianceCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toAlert(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)

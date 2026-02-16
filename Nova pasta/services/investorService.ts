@@ -59,50 +59,15 @@ const toProject = (id: string, raw: Record<string, unknown>): InvestorProject =>
   expectedReturn: String(raw.expectedReturn ?? ''),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(kpiCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedKpis.map((kpi) =>
-      setDoc(doc(db, 'investorKpis', kpi.id), {
-        ...kpi,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    seedProjects.map((project) =>
-      setDoc(doc(db, 'investorProjects', project.id), {
-        ...project,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const investorService = {
   async listKpis(): Promise<InvestorKpi[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(kpiCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toKpi(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listProjects(): Promise<InvestorProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));

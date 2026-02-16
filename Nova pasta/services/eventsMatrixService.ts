@@ -15,29 +15,6 @@ const eventsMatrixCollection = collection(db, 'eventsMatrix');
 
 let seeded = false;
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(eventsMatrixCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    eventsMatrixData.map((moduleData, index) =>
-      setDoc(doc(db, 'eventsMatrix', `MODULE-${index + 1}`), {
-        ...moduleData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixModule => ({
   title: String(raw.title ?? id),
@@ -57,7 +34,6 @@ const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixMod
 
 export const eventsMatrixService = {
   async listModules(): Promise<EventMatrixModule[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(eventsMatrixCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toEventModule(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)

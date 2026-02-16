@@ -2,12 +2,9 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { mockEmployees, mockPayroll, mockPPEOrders, mockTimeRecords } from '../constants';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { Employee, PayrollEntry, PPEOrder, TimeRecord } from '../types';
@@ -16,8 +13,6 @@ const employeesCollection = collection(db, 'employees');
 const timeRecordsCollection = collection(db, 'timeRecords');
 const payrollCollection = collection(db, 'payrollEntries');
 const ppeOrdersCollection = collection(db, 'ppeOrders');
-
-let seeded = false;
 
 const toEmployee = (id: string, raw: Record<string, unknown>): Employee => ({
   id,
@@ -56,63 +51,9 @@ const toPPEOrder = (id: string, raw: Record<string, unknown>): PPEOrder => ({
   conformityDoc: Boolean(raw.conformityDoc),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(employeesCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockEmployees.map((employee) =>
-      setDoc(doc(db, 'employees', employee.id), {
-        ...employee,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockTimeRecords.map((record) =>
-      setDoc(doc(db, 'timeRecords', record.id), {
-        ...record,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPayroll.map((entry) =>
-      setDoc(doc(db, 'payrollEntries', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPPEOrders.map((order) =>
-      setDoc(doc(db, 'ppeOrders', order.id), {
-        ...order,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const workforceService = {
   async listEmployees(): Promise<Employee[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(employeesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toEmployee(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -120,7 +61,6 @@ export const workforceService = {
   },
 
   async listTimeRecords(): Promise<TimeRecord[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(timeRecordsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toTimeRecord(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -128,7 +68,6 @@ export const workforceService = {
   },
 
   async listPayrollEntries(): Promise<PayrollEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(payrollCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPayrollEntry(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -136,7 +75,6 @@ export const workforceService = {
   },
 
   async listPPEOrders(): Promise<PPEOrder[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(ppeOrdersCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPPEOrder(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -144,7 +82,6 @@ export const workforceService = {
   },
 
   async updatePayrollStatus(entryId: string, status: PayrollEntry['status']): Promise<void> {
-    await ensureSeedData();
     await setDoc(
       doc(db, 'payrollEntries', entryId),
       {

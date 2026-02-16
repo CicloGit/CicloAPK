@@ -2,21 +2,17 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { mockManagementAlerts, mockManagementHistory } from '../constants';
 import { db } from '../config/firebase';
 import { ManagementAlert, ManagementRecord } from '../types';
 
 const alertsCollection = collection(db, 'managementAlerts');
 const historyCollection = collection(db, 'managementHistory');
-
-let seeded = false;
 
 const toAlert = (id: string, raw: Record<string, unknown>): ManagementAlert => ({
   id,
@@ -38,43 +34,9 @@ const toHistory = (id: string, raw: Record<string, unknown>): ManagementRecord =
   executor: String(raw.executor ?? ''),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(alertsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockManagementAlerts.map((alert) =>
-      setDoc(doc(db, 'managementAlerts', alert.id), {
-        ...alert,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockManagementHistory.map((record) =>
-      setDoc(doc(db, 'managementHistory', record.id), {
-        ...record,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const managementService = {
   async listAlerts(): Promise<ManagementAlert[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(alertsCollection);
     return snapshot.docs
       .filter((docSnapshot: any) => !(docSnapshot.data() as Record<string, unknown>).resolved)
@@ -82,14 +44,12 @@ export const managementService = {
   },
 
   async listHistory(): Promise<ManagementRecord[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async createHistoryRecord(data: Omit<ManagementRecord, 'id' | 'date'>): Promise<ManagementRecord> {
-    await ensureSeedData();
     const newRecord: ManagementRecord = {
       id: `HIST-${Date.now()}`,
       date: new Date().toLocaleDateString('pt-BR'),
@@ -110,7 +70,6 @@ export const managementService = {
   },
 
   async resolveAlert(alertId: string): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'managementAlerts', alertId), {
       resolved: true,
       updatedAt: serverTimestamp(),

@@ -2,21 +2,15 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { mockCarbonCredits, mockCarbonProjects, mockSustainablePractices } from '../constants';
 import { db } from '../config/firebase';
 import { CarbonCredit, CarbonProject, SustainablePractice } from '../types';
 
 const practicesCollection = collection(db, 'sustainablePractices');
 const projectsCollection = collection(db, 'carbonProjects');
 const creditsCollection = collection(db, 'carbonCredits');
-
-let seeded = false;
 
 const toPractice = (id: string, raw: Record<string, unknown>): SustainablePractice => ({
   id,
@@ -44,53 +38,9 @@ const toCredit = (id: string, raw: Record<string, unknown>): CarbonCredit => ({
   certificateHash: String(raw.certificateHash ?? ''),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(practicesCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockSustainablePractices.map((practice) =>
-      setDoc(doc(db, 'sustainablePractices', practice.id), {
-        ...practice,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockCarbonProjects.map((project) =>
-      setDoc(doc(db, 'carbonProjects', project.id), {
-        ...project,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockCarbonCredits.map((credit) =>
-      setDoc(doc(db, 'carbonCredits', credit.id), {
-        ...credit,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const carbonService = {
   async listPractices(): Promise<SustainablePractice[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(practicesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPractice(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -98,7 +48,6 @@ export const carbonService = {
   },
 
   async listProjects(): Promise<CarbonProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -106,7 +55,6 @@ export const carbonService = {
   },
 
   async listCredits(): Promise<CarbonCredit[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(creditsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toCredit(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -114,7 +62,6 @@ export const carbonService = {
   },
 
   async updateProjectStatus(projectId: string, status: CarbonProject['status']): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'carbonProjects', projectId), {
       status,
       updatedAt: serverTimestamp(),

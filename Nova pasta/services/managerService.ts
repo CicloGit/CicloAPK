@@ -56,50 +56,15 @@ const toActivity = (id: string, raw: Record<string, unknown>): ManagerActivity =
   severity: (raw.severity as ManagerActivity['severity']) ?? 'ALERTA',
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(kpiCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedKpis.map((kpi) =>
-      setDoc(doc(db, 'managerKpis', kpi.id), {
-        ...kpi,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    seedActivities.map((activity) =>
-      setDoc(doc(db, 'managerActivities', activity.id), {
-        ...activity,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
 
 export const managerService = {
   async listKpis(): Promise<ManagerKpi[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(kpiCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toKpi(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listActivities(): Promise<ManagerActivity[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(activityCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toActivity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));

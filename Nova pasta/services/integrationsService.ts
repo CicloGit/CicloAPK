@@ -97,32 +97,14 @@ const toIntegrationStatus = (raw: Record<string, unknown> | undefined): Integrat
   };
 };
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDoc(statusDocRef);
-  if (!snapshot.exists()) {
-    await setDoc(statusDocRef, {
-      ...defaultStatus,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
-
-  seeded = true;
-}
 
 export const integrationsService = {
   async getStatus(): Promise<IntegrationStatus> {
-    await ensureSeedData();
     const snapshot = await getDoc(statusDocRef);
     return toIntegrationStatus(snapshot.data() as Record<string, unknown> | undefined);
   },
 
   async updateStatus(partial: Partial<IntegrationStatus>): Promise<void> {
-    await ensureSeedData();
     await setDoc(
       statusDocRef,
       {

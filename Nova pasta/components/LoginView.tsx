@@ -1,7 +1,17 @@
 
 import React from 'react';
 import { User } from '../types';
-import { mockUsers } from '../constants';
+
+const availableRoles: User['role'][] = [
+  'Gestor',
+  'Produtor',
+  'Operador',
+  'Técnico',
+  'Investidor',
+  'Fornecedor',
+  'Integradora',
+  'Produtor de Sementes',
+];
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -17,13 +27,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         </div>
         
         <div className="space-y-3">
-            {mockUsers.map(user => (
+            {availableRoles.map(role => (
                 <button
-                    key={user.role}
-                    onClick={() => onLogin(user)}
+                    key={role}
+                    onClick={() => onLogin({ name: role, role })}
                     className="w-full px-4 py-3 font-semibold text-white bg-slate-700 rounded-lg hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 ease-in-out transform hover:scale-105"
                 >
-                    Entrar como {user.role}
+                    Entrar como {role}
                 </button>
             ))}
         </div>
