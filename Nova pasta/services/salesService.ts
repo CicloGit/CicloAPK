@@ -2,19 +2,14 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
-  query,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { mockSalesOffers } from '../constants';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { SalesOffer } from '../types';
 
 const salesOfferCollection = collection(db, 'salesOffers');
-
-let seeded = false;
 
 const toSalesOffer = (id: string, raw: Record<string, unknown>): SalesOffer => ({
   id,
@@ -25,33 +20,8 @@ const toSalesOffer = (id: string, raw: Record<string, unknown>): SalesOffer => (
   date: String(raw.date ?? new Date().toLocaleDateString('pt-BR')),
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  const snapshot = await getDocs(query(salesOfferCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockSalesOffers.map((offer) =>
-      setDoc(doc(db, 'salesOffers', offer.id), {
-        ...offer,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  seeded = true;
-}
-
 export const salesService = {
   async listOffers(): Promise<SalesOffer[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(salesOfferCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toSalesOffer(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -59,7 +29,6 @@ export const salesService = {
   },
 
   async createOffer(data: Pick<SalesOffer, 'product' | 'quantity' | 'price'>): Promise<SalesOffer> {
-    await ensureSeedData();
     const newOffer: SalesOffer = {
       id: `SO-${Date.now()}`,
       product: data.product,

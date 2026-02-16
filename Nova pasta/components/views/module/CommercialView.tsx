@@ -13,7 +13,7 @@ import FilterIcon from '../../icons/FilterIcon';
 import { CubeIcon } from '../../icons/CubeIcon';
 import { useToast } from '../../../contexts/ToastContext';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { commercialService } from '../../../services/commercialService';
+import { commercialService, MarketplaceOrderHistory } from '../../../services/commercialService';
 import { marketOrderService } from '../../../services/marketOrderService';
 
 const CommercialView: React.FC = () => {
@@ -36,11 +36,7 @@ const CommercialView: React.FC = () => {
     const [sortBy, setSortBy] = useState<'price_asc' | 'rating_desc'>('price_asc');
     const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
 
-    // Mocks for order history to show instant update after purchase
-    const [orders, setOrders] = useState([
-        { id: 'ORD-2024-88', product: 'Adubo Orgânico', supplier: 'AgroFertilizantes Ltda', value: 1200.00, status: 'Em Trânsito' },
-        { id: 'ORD-2024-72', product: 'Vacina Aftosa', supplier: 'VetCenter', value: 450.00, status: 'Entregue' }
-    ]);
+    const [orders, setOrders] = useState<MarketplaceOrderHistory[]>([]);
 
     useEffect(() => {
         const loadCommercialData = async () => {
@@ -52,9 +48,11 @@ const CommercialView: React.FC = () => {
                     commercialService.listCorporateCards(),
                     commercialService.listPartnerStores()
                 ]);
+                const loadedOrders = await commercialService.listMarketplaceOrderHistory();
                 setMarketplaceListings(loadedListings);
                 setCorporateCards(loadedCards);
                 setPartnerStores(loadedStores);
+                setOrders(loadedOrders);
                 if (loadedCards.length > 0) {
                     setSelectedCardId(loadedCards[0].id);
                 }
@@ -118,7 +116,8 @@ const CommercialView: React.FC = () => {
                 product: item.productName,
                 supplier: item.b2bSupplier,
                 value: item.price * item.quantity,
-                status: 'Aguardando Envio'
+                status: 'Aguardando Envio',
+                date: new Date().toLocaleDateString('pt-BR'),
             }));
             setOrders([...newOrders, ...orders]);
             setCart([]);
