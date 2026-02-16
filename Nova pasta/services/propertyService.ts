@@ -25,7 +25,10 @@ const projectCollection = collection(db, 'productionProjects');
 
 const DEFAULT_PROPERTY_ID = mockPropertyData.id;
 const DEFAULT_MANUAL_DELETE_PASSWORD = 'CICLO123';
-const MANUAL_DELETE_PASSWORD = String(import.meta.env.VITE_MANUAL_DELETE_PASSWORD ?? DEFAULT_MANUAL_DELETE_PASSWORD).trim();
+const configuredDeletePassword = String(import.meta.env.VITE_MANUAL_DELETE_PASSWORD ?? '').trim();
+const AUTHORIZED_DELETE_PASSWORDS = [DEFAULT_MANUAL_DELETE_PASSWORD, configuredDeletePassword]
+  .map((entry) => entry.trim().toLowerCase())
+  .filter((entry, index, all) => Boolean(entry) && all.indexOf(entry) === index);
 let seeded = false;
 
 const toProperty = (id: string, raw: Record<string, unknown>): Property => ({
@@ -337,11 +340,11 @@ export const propertyService = {
   },
 
   async deleteActivity(activityId: string, authorizationPassword: string): Promise<{ success: boolean; message?: string }> {
-    const informedPassword = authorizationPassword.trim();
+    const informedPassword = authorizationPassword.trim().toLowerCase();
     if (!informedPassword) {
       return { success: false, message: 'Informe a senha de autorizacao para excluir.' };
     }
-    if (informedPassword !== MANUAL_DELETE_PASSWORD) {
+    if (!AUTHORIZED_DELETE_PASSWORDS.includes(informedPassword)) {
       return { success: false, message: 'Senha de autorizacao invalida.' };
     }
 

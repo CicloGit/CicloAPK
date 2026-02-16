@@ -365,7 +365,7 @@ const PropertyRegistrationView: React.FC = () => {
                   className="p-2 border rounded w-full"
                   placeholder="Senha de autorizacao"
                 />
-                <p className="text-xs text-red-700">Senha padrao (se nao configurada no .env): CICLO123</p>
+                <p className="text-xs text-red-700">Senha aceita: valor do .env (`VITE_MANUAL_DELETE_PASSWORD`) ou padrao `CICLO123`.</p>
                 <div className="flex gap-2">
                   <button onClick={() => void handleDeleteActivity()} className="px-3 py-2 bg-red-600 text-white rounded text-sm">Confirmar exclusao</button>
                   <button
