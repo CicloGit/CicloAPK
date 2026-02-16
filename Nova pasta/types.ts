@@ -640,11 +640,39 @@ export interface ProducerAnimalLot {
 export interface ProducerInput {
     id: string;
     name: string;
+    inputType: ProducerInputType;
+    applicationArea: ProducerApplicationArea;
+    targetSpecies: ProducerTargetSpecies[];
     unit: string;
     unitCost: number;
     stock: number;
     createdAt: string;
 }
+
+export type ProducerInputType =
+    | 'ADUBO'
+    | 'RACAO'
+    | 'SAL_MINERAL'
+    | 'MEDICAMENTO'
+    | 'SEMENTE'
+    | 'DEFENSIVO'
+    | 'OUTRO';
+
+export type ProducerApplicationArea =
+    | 'PASTAGEM'
+    | 'LAVOURA'
+    | 'CONFINAMENTO'
+    | 'AVIARIO'
+    | 'CURRAL'
+    | 'GERAL';
+
+export type ProducerTargetSpecies =
+    | 'BOVINOS'
+    | 'AVES'
+    | 'SUINOS'
+    | 'OVINOS'
+    | 'CAPRINOS'
+    | 'EQUINOS';
 
 export interface ProducerExpense {
     id: string;

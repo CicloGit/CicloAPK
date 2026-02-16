@@ -5,11 +5,51 @@ import TrendingUpIcon from '../../icons/TrendingUpIcon';
 import { CashIcon } from '../../icons/CashIcon';
 import CalculatorIcon from '../../icons/CalculatorIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { MarketTrend, Property } from '../../../types';
+import { MarketTrend, ProducerApplicationArea, ProducerInputType, ProducerTargetSpecies, Property } from '../../../types';
 import { reportsService, ConsumptionReportRow, CapacityReport } from '../../../services/reportsService';
 import { producerOpsService } from '../../../services/producerOpsService';
 import { propertyService } from '../../../services/propertyService';
 import { useToast } from '../../../contexts/ToastContext';
+
+const INPUT_TYPE_LABELS: Record<ProducerInputType, string> = {
+    ADUBO: 'Adubo',
+    RACAO: 'Racao',
+    SAL_MINERAL: 'Sal mineral',
+    MEDICAMENTO: 'Medicamento',
+    SEMENTE: 'Semente',
+    DEFENSIVO: 'Defensivo',
+    OUTRO: 'Outro',
+};
+
+const APPLICATION_AREA_LABELS: Record<ProducerApplicationArea, string> = {
+    PASTAGEM: 'Pastagem',
+    LAVOURA: 'Lavoura',
+    CONFINAMENTO: 'Confinamento',
+    AVIARIO: 'Aviario',
+    CURRAL: 'Curral',
+    GERAL: 'Geral',
+};
+
+const SPECIES_LABELS: Record<ProducerTargetSpecies, string> = {
+    BOVINOS: 'Bovinos',
+    AVES: 'Aves',
+    SUINOS: 'Suinos',
+    OVINOS: 'Ovinos',
+    CAPRINOS: 'Caprinos',
+    EQUINOS: 'Equinos',
+};
+
+const SPECIES_REQUIRED_TYPES = new Set<ProducerInputType>(['RACAO', 'SAL_MINERAL', 'MEDICAMENTO']);
+
+const DEFAULT_AREA_BY_TYPE: Record<ProducerInputType, ProducerApplicationArea> = {
+    ADUBO: 'PASTAGEM',
+    RACAO: 'CONFINAMENTO',
+    SAL_MINERAL: 'CURRAL',
+    MEDICAMENTO: 'CURRAL',
+    SEMENTE: 'LAVOURA',
+    DEFENSIVO: 'LAVOURA',
+    OUTRO: 'GERAL',
+};
 
 const ReportsView: React.FC = () => {
     const { addToast } = useToast();
@@ -29,11 +69,36 @@ const ReportsView: React.FC = () => {
 
     const [propertyData, setPropertyData] = useState<Property | null>(null);
     const [lots, setLots] = useState<Array<{ id: string; name: string; category: string; headcount: number; averageWeightKg: number }>>([]);
-    const [inputs, setInputs] = useState<Array<{ id: string; name: string; unit: string; unitCost: number; stock: number }>>([]);
+    const [inputs, setInputs] = useState<Array<{
+        id: string;
+        name: string;
+        inputType: ProducerInputType;
+        applicationArea: ProducerApplicationArea;
+        targetSpecies: ProducerTargetSpecies[];
+        unit: string;
+        unitCost: number;
+        stock: number;
+    }>>([]);
     const [expenses, setExpenses] = useState<Array<{ id: string; description: string; amount: number; category: string; date: string }>>([]);
 
     const [newLot, setNewLot] = useState({ name: '', category: '', headcount: '', averageWeightKg: '' });
-    const [newInput, setNewInput] = useState({ name: '', unit: 'kg', unitCost: '', stock: '' });
+    const [newInput, setNewInput] = useState<{
+        name: string;
+        inputType: ProducerInputType;
+        applicationArea: ProducerApplicationArea;
+        targetSpecies: ProducerTargetSpecies[];
+        unit: string;
+        unitCost: string;
+        stock: string;
+    }>({
+        name: '',
+        inputType: 'RACAO',
+        applicationArea: DEFAULT_AREA_BY_TYPE.RACAO,
+        targetSpecies: ['BOVINOS'],
+        unit: 'kg',
+        unitCost: '',
+        stock: '',
+    });
     const [newExpense, setNewExpense] = useState({ description: '', category: 'OPERACIONAL', amount: '' });
 
     const [simCommodity, setSimCommodity] = useState('Boi Gordo');
@@ -121,15 +186,48 @@ const ReportsView: React.FC = () => {
             addToast({ type: 'warning', title: 'Dados incompletos', message: 'Preencha os dados do insumo.' });
             return;
         }
+        if (SPECIES_REQUIRED_TYPES.has(newInput.inputType) && newInput.targetSpecies.length === 0) {
+            addToast({ type: 'warning', title: 'Classificacao obrigatoria', message: 'Selecione ao menos uma especie-alvo para este tipo de insumo.' });
+            return;
+        }
         await producerOpsService.createInput({
             name: newInput.name,
+            inputType: newInput.inputType,
+            applicationArea: newInput.applicationArea,
+            targetSpecies: newInput.targetSpecies,
             unit: newInput.unit,
             unitCost: Number(newInput.unitCost),
             stock: Number(newInput.stock),
         });
-        setNewInput({ name: '', unit: 'kg', unitCost: '', stock: '' });
+        setNewInput({
+            name: '',
+            inputType: 'RACAO',
+            applicationArea: DEFAULT_AREA_BY_TYPE.RACAO,
+            targetSpecies: ['BOVINOS'],
+            unit: 'kg',
+            unitCost: '',
+            stock: '',
+        });
         await refreshRegistryData();
         addToast({ type: 'success', title: 'Insumo cadastrado', message: 'Insumo salvo com sucesso.' });
+    };
+
+    const handleInputTypeChange = (inputType: ProducerInputType) => {
+        setNewInput((previous) => ({
+            ...previous,
+            inputType,
+            applicationArea: DEFAULT_AREA_BY_TYPE[inputType],
+            targetSpecies: SPECIES_REQUIRED_TYPES.has(inputType) ? previous.targetSpecies : [],
+        }));
+    };
+
+    const toggleInputSpecies = (species: ProducerTargetSpecies) => {
+        setNewInput((previous) => {
+            if (previous.targetSpecies.includes(species)) {
+                return { ...previous, targetSpecies: previous.targetSpecies.filter((entry) => entry !== species) };
+            }
+            return { ...previous, targetSpecies: [...previous.targetSpecies, species] };
+        });
     };
 
     const handleCreateExpense = async () => {
@@ -177,6 +275,19 @@ const ReportsView: React.FC = () => {
             };
         });
     }, [salePrice, saleWeight, totalCostPerHead, replacementCost]);
+
+    const inputsByArea = useMemo(() => {
+        return inputs.reduce<Record<ProducerApplicationArea, typeof inputs>>(
+            (grouped, input) => {
+                if (!grouped[input.applicationArea]) {
+                    grouped[input.applicationArea] = [];
+                }
+                grouped[input.applicationArea].push(input);
+                return grouped;
+            },
+            {} as Record<ProducerApplicationArea, typeof inputs>
+        );
+    }, [inputs]);
 
     if (isLoading) {
         return <LoadingSpinner text="Carregando relatorios..." />;
@@ -337,14 +448,71 @@ const ReportsView: React.FC = () => {
 
                         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
                             <h3 className="text-lg font-bold text-slate-800">Cadastro de Insumos</h3>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} className="p-2 border rounded" placeholder="Nome do insumo" />
+                                <select value={newInput.inputType} onChange={(e) => handleInputTypeChange(e.target.value as ProducerInputType)} className="p-2 border rounded">
+                                    {Object.entries(INPUT_TYPE_LABELS).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
+                                </select>
+                                <select value={newInput.applicationArea} onChange={(e) => setNewInput({ ...newInput, applicationArea: e.target.value as ProducerApplicationArea })} className="p-2 border rounded">
+                                    {Object.entries(APPLICATION_AREA_LABELS).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
+                                </select>
                                 <input value={newInput.unit} onChange={(e) => setNewInput({ ...newInput, unit: e.target.value })} className="p-2 border rounded" placeholder="Unidade" />
                                 <input type="number" value={newInput.unitCost} onChange={(e) => setNewInput({ ...newInput, unitCost: e.target.value })} className="p-2 border rounded" placeholder="Custo unitario" />
                                 <input type="number" value={newInput.stock} onChange={(e) => setNewInput({ ...newInput, stock: e.target.value })} className="p-2 border rounded" placeholder="Estoque" />
                             </div>
+                            <div className="border rounded-lg p-3 bg-slate-50">
+                                <p className="text-xs font-bold text-slate-600 uppercase mb-2">Especie-alvo</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {Object.entries(SPECIES_LABELS).map(([value, label]) => {
+                                        const species = value as ProducerTargetSpecies;
+                                        const checked = newInput.targetSpecies.includes(species);
+                                        return (
+                                            <label key={value} className="inline-flex items-center gap-2 text-sm text-slate-700 bg-white border rounded px-2 py-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => toggleInputSpecies(species)}
+                                                    disabled={!SPECIES_REQUIRED_TYPES.has(newInput.inputType)}
+                                                />
+                                                {label}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {!SPECIES_REQUIRED_TYPES.has(newInput.inputType) && (
+                                    <p className="text-xs text-slate-500 mt-2">Para este tipo de insumo, a especie-alvo e opcional.</p>
+                                )}
+                            </div>
                             <button onClick={() => void handleCreateInput()} className="px-4 py-2 bg-emerald-600 text-white rounded-md font-semibold">Cadastrar insumo</button>
-                            <div className="border-t pt-3 space-y-2">{inputs.map((input) => <div key={input.id} className="text-sm flex justify-between"><span>{input.name}</span><span className="font-semibold">{input.stock} {input.unit}</span></div>)}</div>
+                            <div className="border-t pt-3 space-y-3">
+                                {Object.entries(inputsByArea).map(([area, areaInputs]) => (
+                                    <div key={area} className="border rounded-lg p-3">
+                                        <p className="text-xs font-bold uppercase text-slate-500 mb-2">{APPLICATION_AREA_LABELS[area as ProducerApplicationArea]}</p>
+                                        <div className="space-y-2">
+                                            {areaInputs.map((input) => (
+                                                <div key={input.id} className="text-sm flex flex-col gap-1 border-b border-slate-100 pb-2 last:border-b-0">
+                                                    <div className="flex justify-between">
+                                                        <span className="font-semibold text-slate-800">{input.name}</span>
+                                                        <span className="font-semibold">{input.stock} {input.unit}</span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                                                        <span className="px-2 py-0.5 rounded bg-slate-100">{INPUT_TYPE_LABELS[input.inputType]}</span>
+                                                        {input.targetSpecies.length > 0 && (
+                                                            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                                                                {input.targetSpecies.map((species) => SPECIES_LABELS[species]).join(', ')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 

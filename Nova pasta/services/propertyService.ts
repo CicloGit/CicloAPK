@@ -24,6 +24,8 @@ const pastureCollection = collection(db, 'pastures');
 const projectCollection = collection(db, 'productionProjects');
 
 const DEFAULT_PROPERTY_ID = mockPropertyData.id;
+const DEFAULT_MANUAL_DELETE_PASSWORD = 'CICLO123';
+const MANUAL_DELETE_PASSWORD = String(import.meta.env.VITE_MANUAL_DELETE_PASSWORD ?? DEFAULT_MANUAL_DELETE_PASSWORD).trim();
 let seeded = false;
 
 const toProperty = (id: string, raw: Record<string, unknown>): Property => ({
@@ -329,7 +331,15 @@ export const propertyService = {
     return validation;
   },
 
-  async deleteActivity(activityId: string): Promise<{ success: boolean; message?: string }> {
+  async deleteActivity(activityId: string, authorizationPassword: string): Promise<{ success: boolean; message?: string }> {
+    const informedPassword = authorizationPassword.trim();
+    if (!informedPassword) {
+      return { success: false, message: 'Informe a senha de autorizacao para excluir.' };
+    }
+    if (informedPassword !== MANUAL_DELETE_PASSWORD) {
+      return { success: false, message: 'Senha de autorizacao invalida.' };
+    }
+
     try {
       await ensureSeedData();
       await deleteDoc(doc(db, 'productionProjects', activityId));
