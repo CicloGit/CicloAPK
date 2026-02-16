@@ -1,14 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockBankAccounts, mockExpenses, mockReceivables, mockTransactions } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { BankAccount, Expense, Receivable, Transaction } from '../types';
@@ -86,54 +76,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const receivableSnapshot = await getDocs(query(receivableCollection, limit(1)));
-  if (!receivableSnapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockReceivables.map((item) =>
-      setDoc(doc(db, 'receivables', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockExpenses.map((item) =>
-      setDoc(doc(db, 'expenses', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.values(mockBankAccounts).map((item) =>
-      setDoc(doc(db, 'bankAccounts', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockTransactions.map((item) =>
-      setDoc(doc(db, 'transactions', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const financialService = {
   async listReceivables(): Promise<Receivable[]> {

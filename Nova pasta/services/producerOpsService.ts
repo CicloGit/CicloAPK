@@ -144,74 +144,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(lotsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  const now = new Date().toLocaleString('pt-BR');
-  const seedLots: ProducerAnimalLot[] = [
-    { id: 'LOT-001', name: 'Lote A - Recria', category: 'Recria', headcount: 120, averageWeightKg: 320, createdAt: now },
-  ];
-  const seedInputs: ProducerInput[] = [
-    {
-      id: 'INP-001',
-      name: 'Adubo NPK 20-05-20',
-      inputType: 'ADUBO',
-      applicationArea: 'PASTAGEM',
-      targetSpecies: [],
-      unit: 'kg',
-      unitCost: 3.9,
-      stock: 1800,
-      createdAt: now,
-    },
-    {
-      id: 'INP-002',
-      name: 'Racao Crescimento Bovinos',
-      inputType: 'RACAO',
-      applicationArea: 'CONFINAMENTO',
-      targetSpecies: ['BOVINOS'],
-      unit: 'kg',
-      unitCost: 2.2,
-      stock: 1200,
-      createdAt: now,
-    },
-    {
-      id: 'INP-003',
-      name: 'Sal Mineral 80 Bovinos',
-      inputType: 'SAL_MINERAL',
-      applicationArea: 'CURRAL',
-      targetSpecies: ['BOVINOS'],
-      unit: 'kg',
-      unitCost: 4.25,
-      stock: 240,
-      createdAt: now,
-    },
-  ];
-
-  await Promise.all(
-    seedLots.map((lot) =>
-      setDoc(doc(db, 'producerAnimalLots', lot.id), {
-        ...lot,
-        createdAtTs: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    seedInputs.map((input) =>
-      setDoc(doc(db, 'producerInputs', input.id), {
-        ...input,
-        createdAtTs: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
 
 const parseQuantity = (raw?: string): number => {
   if (!raw) return 0;

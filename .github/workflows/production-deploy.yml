@@ -1,0 +1,118 @@
+name: Production Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  APP_DIR: Nova pasta
+  FUNCTIONS_DIR: Nova pasta/functions
+  FIREBASE_PROJECT_ID: ciclo-plus-f9c8f
+  VITE_BACKEND_BASE_URL: https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api
+  VITE_USE_FIREBASE_EMULATORS: "false"
+  VITE_FIREBASE_PROJECT_ID: ciclo-plus-f9c8f
+  VITE_FIREBASE_STORAGE_BUCKET: ciclo-plus-f9c8f.firebasestorage.app
+  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+jobs:
+  deploy:
+    name: Deploy Firebase Production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://ciclo-plus-f9c8f.web.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: Nova pasta/package-lock.json
+
+      - name: Validate latest main tip
+        run: |
+          git fetch origin main
+          LOCAL_SHA="$(git rev-parse HEAD)"
+          REMOTE_SHA="$(git rev-parse origin/main)"
+          if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+            echo "Outdated run: $LOCAL_SHA != $REMOTE_SHA"
+            exit 1
+          fi
+
+      - name: Validate strict Firebase real mode
+        run: node scripts/verify-firebase-real-mode.mjs
+
+      - name: Install web dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: npm ci
+
+      - name: Validate frontend Firebase env
+        run: |
+          for key in \
+            VITE_FIREBASE_API_KEY \
+            VITE_FIREBASE_AUTH_DOMAIN \
+            VITE_FIREBASE_MESSAGING_SENDER_ID \
+            VITE_FIREBASE_APP_ID; do
+            if [ -z "${!key}" ]; then
+              echo "Missing required secret/env: $key"
+              exit 1
+            fi
+          done
+
+      - name: Web typecheck
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run typecheck
+
+      - name: Build web app
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run build
+
+      - name: Install functions dependencies
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: npm install
+
+      - name: Build functions
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: npm run build
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Validate deploy credentials
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -z "${FIREBASE_TOKEN}" ]; then
+            echo "Missing required repository secret: FIREBASE_TOKEN"
+            exit 1
+          fi
+
+      - name: Deploy hosting, API, and Firebase rules/indexes
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --only "hosting,functions:api,firestore:rules,firestore:indexes,storage" \
+            --token "${FIREBASE_TOKEN}"
+
+      - name: Smoke test production endpoints
+        run: |
+          curl -fsS "https://ciclo-plus-f9c8f.web.app" >/dev/null
+          API_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/health")"
+          echo "$API_HEALTH" | grep -q '"status":"ok"'

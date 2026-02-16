@@ -1,13 +1,4 @@
-﻿import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { liquidationFlows } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { LiquidationFlow } from '../types';
 
@@ -20,24 +11,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(liquidationFlowsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    liquidationFlows.map((flow, index) =>
-      setDoc(doc(db, 'liquidationFlows', `FLOW-${index + 1}`), {
-        ...flow,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 const toLiquidationFlow = (id: string, raw: Record<string, unknown>): LiquidationFlow => ({
   title: String(raw.title ?? id),

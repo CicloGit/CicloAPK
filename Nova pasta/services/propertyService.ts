@@ -9,11 +9,6 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import {
-  mockPropertyData,
-  mockProductionProjects,
-  mockAnimalDetails,
-} from '../constants';
 import { Property, Pasture, ProductionProject, PastureManagementHistoryItem } from '../types';
 import { Validators, ValidationResult } from '../lib/validators';
 import { db } from '../config/firebase';
@@ -23,19 +18,43 @@ const propertyCollection = collection(db, 'properties');
 const pastureCollection = collection(db, 'pastures');
 const projectCollection = collection(db, 'productionProjects');
 
-const DEFAULT_PROPERTY_ID = mockPropertyData.id;
+const DEFAULT_PROPERTY_ID = 'property-default';
 const DEFAULT_MANUAL_DELETE_PASSWORD = 'CICLO123';
 const MANUAL_DELETE_PASSWORD = String(import.meta.env.VITE_MANUAL_DELETE_PASSWORD ?? DEFAULT_MANUAL_DELETE_PASSWORD).trim();
+
+const EMPTY_PROPERTY_TEMPLATE: Property = {
+  id: DEFAULT_PROPERTY_ID,
+  name: '',
+  carNumber: '',
+  totalArea: 0,
+  currentStockingCapacity: 0,
+  animalCount: 0,
+  pastureManagementHistory: [],
+  pastureInvestmentPerHa: 0,
+  cattleInvestmentPerHa: 0,
+  infrastructure: [],
+  machinery: [],
+  perimeter: [],
+  satelliteImageUrl: '',
+};
+
 let seeded = false;
 
+const buildEmptyProperty = (id: string = DEFAULT_PROPERTY_ID): Property => ({
+  ...EMPTY_PROPERTY_TEMPLATE,
+  id,
+});
+
 const toProperty = (id: string, raw: Record<string, unknown>): Property => ({
-  ...mockPropertyData,
+  ...buildEmptyProperty(id),
   ...raw,
   id,
-  pastureManagementHistory: (raw.pastureManagementHistory as PastureManagementHistoryItem[]) ?? [],
-  perimeter: (raw.perimeter as { x: number; y: number }[]) ?? mockPropertyData.perimeter,
-  infrastructure: (raw.infrastructure as Property['infrastructure']) ?? mockPropertyData.infrastructure,
-  machinery: (raw.machinery as Property['machinery']) ?? mockPropertyData.machinery,
+  pastureManagementHistory: Array.isArray(raw.pastureManagementHistory)
+    ? (raw.pastureManagementHistory as PastureManagementHistoryItem[])
+    : [],
+  perimeter: Array.isArray(raw.perimeter) ? (raw.perimeter as { x: number; y: number }[]) : [],
+  infrastructure: Array.isArray(raw.infrastructure) ? (raw.infrastructure as Property['infrastructure']) : [],
+  machinery: Array.isArray(raw.machinery) ? (raw.machinery as Property['machinery']) : [],
 });
 
 const toPasture = (id: string, raw: Record<string, unknown>): Pasture => ({
@@ -123,60 +142,29 @@ async function ensureSeedData() {
     return;
   }
 
-  const propertySnapshot = await getDoc(doc(db, 'properties', DEFAULT_PROPERTY_ID));
-  if (propertySnapshot.exists()) {
-    seeded = true;
-    return;
-  }
-
-  await setDoc(
-    doc(db, 'properties', DEFAULT_PROPERTY_ID),
-    {
-      ...mockPropertyData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  await Promise.all(
-    mockProductionProjects.map((project) =>
-      setDoc(
-        doc(db, 'productionProjects', project.id),
-        {
-          ...project,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      )
-    )
-  );
-
-  const seededPastures = Object.values(mockAnimalDetails).flatMap((detail) => detail.pastures);
-  await Promise.all(
-    seededPastures.map((pasture) =>
-      setDoc(
-        doc(db, 'pastures', pasture.id),
-        {
-          ...pasture,
-          propertyId: DEFAULT_PROPERTY_ID,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      )
-    )
-  );
-
   seeded = true;
 }
 
+
+async function resolvePrimaryPropertyId(defaultPropertyId: string = DEFAULT_PROPERTY_ID): Promise<string> {
+  const snapshot = await getDocs(query(propertyCollection, limit(1)));
+  if (snapshot.empty) {
+    return defaultPropertyId;
+  }
+
+  return snapshot.docs[0].id;
+}
+
 export const propertyService = {
+  getEmptyProperty(propertyId: string = DEFAULT_PROPERTY_ID): Property {
+    return buildEmptyProperty(propertyId);
+  },
+
   async listProductionProjects(): Promise<ProductionProject[]> {
     await ensureSeedData();
     const snapshot = await getDocs(projectCollection);
     return snapshot.docs
+      .filter((docSnapshot: any) => !isProjectDeleted(docSnapshot.data() as Record<string, unknown>))
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: ProductionProject, b: ProductionProject) => a.name.localeCompare(b.name));
   },
@@ -186,15 +174,24 @@ export const propertyService = {
   ): Promise<{ property: Property; activities: ProductionProject[]; pastures: Pasture[] }> {
     await ensureSeedData();
 
-    const [propertySnapshot, activitySnapshot, pastureSnapshot] = await Promise.all([
-      getDoc(doc(db, 'properties', propertyId)),
+    const resolvedPropertyId = propertyId || DEFAULT_PROPERTY_ID;
+
+    const [propertySnapshot, firstPropertySnapshot, activitySnapshot, pastureSnapshot] = await Promise.all([
+      getDoc(doc(db, 'properties', resolvedPropertyId)),
+      getDocs(query(propertyCollection, limit(1))),
       getDocs(projectCollection),
       getDocs(query(pastureCollection, limit(300))),
     ]);
 
-    const property = propertySnapshot.exists()
-      ? toProperty(propertySnapshot.id, propertySnapshot.data() as Record<string, unknown>)
-      : mockPropertyData;
+    let property: Property;
+    if (propertySnapshot.exists()) {
+      property = toProperty(propertySnapshot.id, propertySnapshot.data() as Record<string, unknown>);
+    } else if (!firstPropertySnapshot.empty) {
+      const fallbackProperty = firstPropertySnapshot.docs[0];
+      property = toProperty(fallbackProperty.id, fallbackProperty.data() as Record<string, unknown>);
+    } else {
+      property = buildEmptyProperty(resolvedPropertyId);
+    }
 
     const activities = activitySnapshot.docs
       .filter((docSnapshot: any) => !isProjectDeleted(docSnapshot.data() as Record<string, unknown>))
@@ -222,11 +219,6 @@ export const propertyService = {
     }
   },
 
-  async listProductionProjects(): Promise<ProductionProject[]> {
-    const { activities } = await this.loadWorkspace();
-    return activities;
-  },
-
   async saveDivision(divisionData: {
     name: string;
     points: { lat: string; long: string }[];
@@ -241,6 +233,7 @@ export const propertyService = {
     const { name, points } = divisionData;
     const polygonPoints = normalizePointToCanvas(points);
     const estimatedArea = estimateAreaFromPoints(points);
+    const propertyId = await resolvePrimaryPropertyId();
 
     const newPasture: Pasture = {
       id: `PAST-${Date.now()}`,
@@ -264,7 +257,7 @@ export const propertyService = {
       doc(db, 'pastures', newPasture.id),
       {
         ...newPasture,
-        propertyId: DEFAULT_PROPERTY_ID,
+        propertyId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
@@ -322,10 +315,12 @@ export const propertyService = {
     }
 
     await ensureSeedData();
+    const targetPropertyId = propertyData.id || (await resolvePrimaryPropertyId());
     await setDoc(
-      doc(db, 'properties', propertyData.id || DEFAULT_PROPERTY_ID),
+      doc(db, 'properties', targetPropertyId),
       {
         ...propertyData,
+        id: targetPropertyId,
         updatedAt: serverTimestamp(),
       },
       { merge: true }

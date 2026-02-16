@@ -1,16 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { mockAuditEvents, mockInventoryItems, mockStockMovements } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { AuditChain } from '../lib/auditChain';
 import { RulesEngine, hasSufficientStock } from '../lib/rulesEngine';
 import { db } from '../config/firebase';
@@ -68,44 +56,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const inventorySnapshot = await getDocs(query(inventoryCollection, limit(1)));
-  if (!inventorySnapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockInventoryItems.map((item) =>
-      setDoc(doc(db, 'inventoryItems', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockStockMovements.map((movement) =>
-      setDoc(doc(db, 'stockMovements', movement.id), {
-        ...movement,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockAuditEvents.map((auditEvent) =>
-      setDoc(doc(db, 'auditEvents', auditEvent.id), {
-        ...auditEvent,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 async function getLatestAuditEvent(): Promise<AuditEvent | null> {
   const auditSnapshot = await getDocs(query(auditCollection, orderBy('createdAt', 'desc'), limit(1)));

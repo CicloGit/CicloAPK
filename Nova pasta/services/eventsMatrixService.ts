@@ -1,13 +1,4 @@
-﻿import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { eventsMatrixData } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { EventMatrixModule } from '../types';
 
@@ -20,24 +11,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(eventsMatrixCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    eventsMatrixData.map((moduleData, index) =>
-      setDoc(doc(db, 'eventsMatrix', `MODULE-${index + 1}`), {
-        ...moduleData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixModule => ({
   title: String(raw.title ?? id),

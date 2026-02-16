@@ -60,6 +60,7 @@ npm run build
 - `npm run typecheck`: apenas validacao TypeScript
 - `npm run emulators:start`: sobe Auth + Firestore + Storage + UI local
 - `npm run firebase:deploy:rules`: publica regras/indexes no Firebase
+- `node ../scripts/verify-firebase-real-mode.mjs`: auditoria de modo real (bloqueia mocks em deploy de producao)
 
 ## Estrutura principal
 
@@ -109,3 +110,10 @@ npm run build
 - Diversos modulos ainda usam mocks de `constants.ts` e precisam migrar para servicos Firebase.
 - O projeto compila com `npm run build`.
 - `services/contractsService.ts`: persistencia de contratos
+
+## Modo Firebase real (producao)
+
+- Producao exige `VITE_USE_FIREBASE_EMULATORS=false`.
+- Producao exige variaveis `VITE_FIREBASE_*` preenchidas com projeto real.
+- Producao usa backend `https://us-central1-<project-id>.cloudfunctions.net/api` (ou `VITE_BACKEND_BASE_URL` explicita).
+- Deploy de producao foi configurado para publicar: Hosting + Functions API + Firestore Rules/Indexes + Storage Rules.

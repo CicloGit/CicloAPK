@@ -1,14 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { mockOperatorRequests, mockOperatorTasks } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { OperatorRequest, OperatorTask } from '../types';
 
@@ -44,34 +34,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(tasksCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockOperatorTasks.map((task) =>
-      setDoc(doc(db, 'operatorTasks', task.id), {
-        ...task,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockOperatorRequests.map((request) =>
-      setDoc(doc(db, 'operatorRequests', request.id), {
-        ...request,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const operatorService = {
   async listTasks(): Promise<OperatorTask[]> {

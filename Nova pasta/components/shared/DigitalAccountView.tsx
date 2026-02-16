@@ -4,7 +4,6 @@ import { CashIcon } from '../icons/CashIcon';
 import LockClosedIcon from '../icons/LockClosedIcon';
 import CheckCircleIcon from '../icons/CheckCircleIcon';
 import ArrowLeftIcon from '../icons/ArrowLeftIcon';
-import { mockTransactions } from '../../constants';
 
 interface DigitalAccountViewProps {
     account: BankAccount;
@@ -15,7 +14,7 @@ interface DigitalAccountViewProps {
 const DigitalAccountView: React.FC<DigitalAccountViewProps> = ({ account, onBack, transactions: externalTransactions }) => {
     const [filter, setFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
     
-    const transactions = (externalTransactions ?? mockTransactions).filter(t => t.accountId === account.id);
+    const transactions = (externalTransactions ?? []).filter(t => t.accountId === account.id);
     const filteredTransactions = transactions.filter(t => filter === 'ALL' || (filter === 'IN' ? t.amount > 0 : t.amount < 0));
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

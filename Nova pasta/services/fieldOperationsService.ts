@@ -62,24 +62,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(diaryCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedEntries.map((entry) =>
-      setDoc(doc(db, 'fieldDiaryEntries', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
 
 export const fieldOperationsService = {
   async listDiaryEntries(): Promise<FieldDiaryEntry[]> {

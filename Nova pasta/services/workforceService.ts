@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockEmployees, mockPayroll, mockPPEOrders, mockTimeRecords } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { Employee, PayrollEntry, PPEOrder, TimeRecord } from '../types';
@@ -61,54 +52,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(employeesCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockEmployees.map((employee) =>
-      setDoc(doc(db, 'employees', employee.id), {
-        ...employee,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockTimeRecords.map((record) =>
-      setDoc(doc(db, 'timeRecords', record.id), {
-        ...record,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPayroll.map((entry) =>
-      setDoc(doc(db, 'payrollEntries', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPPEOrders.map((order) =>
-      setDoc(doc(db, 'ppeOrders', order.id), {
-        ...order,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const workforceService = {
   async listEmployees(): Promise<Employee[]> {

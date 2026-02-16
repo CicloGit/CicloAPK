@@ -58,34 +58,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(kpiCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedKpis.map((kpi) =>
-      setDoc(doc(db, 'technicianKpis', kpi.id), {
-        ...kpi,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    seedReports.map((report) =>
-      setDoc(doc(db, 'technicianReports', report.id), {
-        ...report,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
 
 export const technicianService = {
   async listKpis(): Promise<TechnicianKpi[]> {

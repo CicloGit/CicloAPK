@@ -1,4 +1,4 @@
-﻿import {
+import {
   addDoc,
   collection,
   doc,
@@ -102,17 +102,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDoc(statusDocRef);
-  if (!snapshot.exists()) {
-    await setDoc(statusDocRef, {
-      ...defaultStatus,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
-
   seeded = true;
 }
+
 
 export const integrationsService = {
   async getStatus(): Promise<IntegrationStatus> {

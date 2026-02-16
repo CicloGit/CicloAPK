@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockCertificationProcess, mockSeedFields, mockSeedLots } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CertificationStep, SeedField, SeedLot } from '../types';
 
@@ -49,44 +40,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(seedFieldsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockSeedFields.map((field) =>
-      setDoc(doc(db, 'seedFields', field.id), {
-        ...field,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockSeedLots.map((lot) =>
-      setDoc(doc(db, 'seedLots', lot.id), {
-        ...lot,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockCertificationProcess.map((step, index) =>
-      setDoc(doc(db, 'seedCertifications', `STEP-${index + 1}`), {
-        ...step,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const seedProducerService = {
   async listSeedFields(): Promise<SeedField[]> {

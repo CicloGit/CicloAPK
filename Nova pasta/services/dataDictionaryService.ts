@@ -1,13 +1,4 @@
-﻿import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { dataDictionaryEntities } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { DataEntity } from '../types';
 
@@ -20,24 +11,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(dataDictionaryCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    dataDictionaryEntities.map((entity) =>
-      setDoc(doc(db, 'dataDictionaryEntities', entity.name), {
-        ...entity,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 const toDataEntity = (id: string, raw: Record<string, unknown>): DataEntity => ({
   name: String(raw.name ?? id),

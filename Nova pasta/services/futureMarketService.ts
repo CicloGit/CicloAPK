@@ -1,14 +1,4 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockMarketOpportunities } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { MarketOpportunity } from '../types';
 
@@ -45,24 +35,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(opportunitiesCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockMarketOpportunities.map((item) =>
-      setDoc(doc(db, 'marketOpportunities', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const futureMarketService = {
   async listOpportunities(): Promise<MarketOpportunity[]> {

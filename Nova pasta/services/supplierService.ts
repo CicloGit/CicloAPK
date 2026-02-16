@@ -1,14 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { mockSupplierFinancials, mockSupplierOrders } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { SupplierFinancialSummary, SupplierOrder } from '../types';
 
@@ -39,34 +29,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(supplierOrdersCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockSupplierOrders.map((order) =>
-      setDoc(doc(db, 'supplierOrders', order.id), {
-        ...order,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockSupplierFinancials.map((entry, index) =>
-      setDoc(doc(db, 'supplierFinancials', `FIN-${index + 1}`), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const supplierService = {
   async listOrders(): Promise<SupplierOrder[]> {

@@ -1,0 +1,7 @@
+# Local machine artifacts (repo root)
+/node_modules/
+/dist/
+/.firebase/
+/.vscode/
+/test-results/
+/.env.local

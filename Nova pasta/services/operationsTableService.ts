@@ -1,13 +1,4 @@
-﻿import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { operations } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Operation } from '../types';
 
@@ -20,24 +11,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(operationsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    operations.map((op, index) =>
-      setDoc(doc(db, 'operationsTable', `OP-${index + 1}`), {
-        ...op,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 const toOperation = (id: string, raw: Record<string, unknown>): Operation => ({
   operation: String(raw.operation ?? ''),

@@ -1,14 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockProductionProjects } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ProductionProject } from '../types';
 
@@ -57,34 +47,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(liveContextCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockProductionProjects.map((project) =>
-      setDoc(doc(db, 'liveHandlingContext', project.id), {
-        ...project,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    seedHistory.map((entry) =>
-      setDoc(doc(db, 'liveHandlingHistory', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const liveHandlingService = {
   async listProjects(): Promise<ProductionProject[]> {

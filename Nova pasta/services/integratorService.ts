@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockIntegratedProducers, mockIntegratorMessages, mockPartnershipOffers } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { IntegratedProducer, IntegratorMessage, PartnershipOffer } from '../types';
 
@@ -51,44 +42,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(producersCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockIntegratedProducers.map((producer) =>
-      setDoc(doc(db, 'integratedProducers', producer.id), {
-        ...producer,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockPartnershipOffers.map((offer) =>
-      setDoc(doc(db, 'partnershipOffers', offer.id), {
-        ...offer,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockIntegratorMessages.map((message) =>
-      setDoc(doc(db, 'integratorMessages', message.id), {
-        ...message,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const integratorService = {
   async listProducers(): Promise<IntegratedProducer[]> {

@@ -1,4 +1,5 @@
-# This workflow will build and push a node.js application to an Azure Web App when a commit is pushed to your default branch.
+# This workflow is kept only for manual Azure deploy tests.
+# Production deploy for this repository is handled by Firebase workflows.
 #
 # This workflow assumes you have already created the target Azure App Service web app.
 # For instructions see https://docs.microsoft.com/en-us/azure/app-service/quickstart-nodejs?tabs=linux&pivots=development-environment-cli
@@ -17,9 +18,9 @@
 # For more information on the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # For more samples to get started with GitHub Action workflows to deploy to Azure: https://github.com/Azure/actions-workflow-samples
 
+name: Azure Web App (Manual)
+
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 env:

@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockLogisticsEntries } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { LogisticsEntry } from '../types';
 
@@ -32,24 +23,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(logisticsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockLogisticsEntries.map((entry) =>
-      setDoc(doc(db, 'logisticsEntries', entry.id), {
-        ...entry,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const logisticsService = {
   async listEntries(): Promise<LogisticsEntry[]> {

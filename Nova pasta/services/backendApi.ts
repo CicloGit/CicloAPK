@@ -23,18 +23,34 @@ export interface BackendAIResult {
 }
 
 const resolveBaseUrl = () => {
+  const isDev = import.meta.env.DEV;
+  const isProd = import.meta.env.PROD;
+  const projectId = String(import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '').trim();
+
   const explicit = import.meta.env.VITE_BACKEND_BASE_URL as string | undefined;
   if (explicit && explicit.trim().length > 0) {
-    return explicit.replace(/\/$/, '');
+    const normalized = explicit.replace(/\/$/, '');
+    if (isProd && /localhost|127\.0\.0\.1/i.test(normalized)) {
+      throw new Error('VITE_BACKEND_BASE_URL invalido para producao.');
+    }
+    return normalized;
   }
 
-  const useEmulator = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+  const useEmulator = isDev && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
   if (useEmulator) {
-    const projectId = (import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined) ?? 'ciclo-plus-local';
-    return `http://127.0.0.1:5001/${projectId}/us-central1/api`;
+    const localProjectId = projectId || 'ciclo-plus-local';
+    return `http://127.0.0.1:5001/${localProjectId}/us-central1/api`;
   }
 
-  throw new Error('VITE_BACKEND_BASE_URL nao configurado.');
+  if (projectId && !projectId.toLowerCase().includes('local')) {
+    return `https://us-central1-${projectId}.cloudfunctions.net/api`;
+  }
+
+  if (isProd) {
+    throw new Error('VITE_BACKEND_BASE_URL nao configurado para producao.');
+  }
+
+  throw new Error('Nao foi possivel resolver a URL do backend.');
 };
 
 const API_BASE_URL = resolveBaseUrl();

@@ -26,6 +26,15 @@ export interface AIAnalysisRecord {
 }
 
 const analysesCollection = collection(db, 'aiAnalyses');
+let seeded = false;
+
+async function ensureSeedData() {
+  if (seeded) {
+    return;
+  }
+
+  seeded = true;
+}
 
 const toAnalysisRecord = (id: string, raw: Record<string, unknown>): AIAnalysisRecord => ({
   id,

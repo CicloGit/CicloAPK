@@ -1,20 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import {
-  mockAnimalDetails,
-  mockFinancialDetails,
-  mockProjectStages,
-  mockSectorDetails,
-  mockStageDetails,
-} from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   AnimalProductionDetails,
@@ -85,69 +69,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(financialDetailsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    Object.entries(mockFinancialDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'financialDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockAnimalDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'animalDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockSectorDetails).map(([projectId, details]) =>
-      setDoc(doc(db, 'sectorDetails', projectId), {
-        ...details,
-        projectId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockStageDetails).map(([stageId, details]) =>
-      setDoc(doc(db, 'stageDetails', stageId), {
-        ...details,
-        stageId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    Object.entries(mockProjectStages).map(([projectId, stages]) =>
-      setDoc(doc(db, 'projectStages', projectId), {
-        projectId,
-        stages,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {

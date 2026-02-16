@@ -1,23 +1,8 @@
-﻿import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { architectureNodes } from '../constants';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ArchitectureNode } from '../types';
 
 const architectureCollection = collection(db, 'architectureNodes');
-
-const seedNodes: ArchitectureNode[] = [
-  architectureNodes.CH,
-  architectureNodes.CORE,
-  architectureNodes.MOD,
-];
 
 let seeded = false;
 
@@ -26,24 +11,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(architectureCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    seedNodes.map((node) =>
-      setDoc(doc(db, 'architectureNodes', node.id), {
-        ...node,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
 
 const toArchitectureNode = (id: string, raw: Record<string, unknown>): ArchitectureNode => ({
   id,

@@ -1,14 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { mockMarketTrends } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { MarketTrend } from '../types';
 
@@ -91,46 +81,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const [trendSnapshot, consumptionSnapshot, capacitySnapshot] = await Promise.all([
-    getDocs(query(marketTrendsCollection, limit(1))),
-    getDocs(query(consumptionCollection, limit(1))),
-    getDocs(query(capacityCollection, limit(1))),
-  ]);
-
-  if (trendSnapshot.empty) {
-    await Promise.all(
-      mockMarketTrends.map((trend) =>
-        setDoc(doc(db, 'marketTrends', trend.commodity), {
-          ...trend,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  if (consumptionSnapshot.empty) {
-    await Promise.all(
-      seedConsumptionRows.map((row) =>
-        setDoc(doc(db, 'reportConsumptions', row.id), {
-          ...row,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  if (capacitySnapshot.empty) {
-    await setDoc(doc(db, 'reportCapacity', 'current'), {
-      ...seedCapacity,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
-
   seeded = true;
 }
+
+
 
 export const reportsService = {
   async listMarketTrends(): Promise<MarketTrend[]> {

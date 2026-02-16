@@ -5,7 +5,7 @@ import {
   SECTOR_VARIETIES,
   cultivarFactors,
   productFactors,
-} from '../../constants';
+} from '../../config/propertyReferenceData';
 import {
   Pasture,
   ProductionProject,

@@ -1,4 +1,4 @@
-﻿import {
+import {
   collection,
   doc,
   getDocs,
@@ -98,47 +98,9 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(contractsCollection, limit(1)));
-  if (snapshot.empty) {
-    await Promise.all(
-      seedContracts.map((item) =>
-        setDoc(doc(db, 'legalContracts', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  const licenseSnapshot = await getDocs(query(licensesCollection, limit(1)));
-  if (licenseSnapshot.empty) {
-    await Promise.all(
-      seedLicenses.map((item) =>
-        setDoc(doc(db, 'legalLicenses', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
-  const complianceSnapshot = await getDocs(query(complianceCollection, limit(1)));
-  if (complianceSnapshot.empty) {
-    await Promise.all(
-      seedAlerts.map((item) =>
-        setDoc(doc(db, 'legalComplianceAlerts', item.id), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-  }
-
   seeded = true;
 }
+
 
 const toContract = (id: string, raw: Record<string, unknown>): LegalContract => ({
   id,

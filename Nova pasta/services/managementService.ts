@@ -1,15 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { mockManagementAlerts, mockManagementHistory } from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ManagementAlert, ManagementRecord } from '../types';
 
@@ -43,34 +32,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(alertsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockManagementAlerts.map((alert) =>
-      setDoc(doc(db, 'managementAlerts', alert.id), {
-        ...alert,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockManagementHistory.map((record) =>
-      setDoc(doc(db, 'managementHistory', record.id), {
-        ...record,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const managementService = {
   async listAlerts(): Promise<ManagementAlert[]> {

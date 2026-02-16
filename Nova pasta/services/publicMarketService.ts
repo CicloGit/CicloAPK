@@ -1,19 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import {
-  mockAuctionListings,
-  mockMarketSaturation,
-  mockMarketTrends,
-  mockNewsItems,
-  mockRegionalStats,
-} from '../constants';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AggregatedStat, AuctionListing, MarketSaturation, MarketTrend, NewsItem } from '../types';
 
@@ -78,64 +63,10 @@ async function ensureSeedData() {
     return;
   }
 
-  const snapshot = await getDocs(query(marketTrendsCollection, limit(1)));
-  if (!snapshot.empty) {
-    seeded = true;
-    return;
-  }
-
-  await Promise.all(
-    mockMarketTrends.map((trend) =>
-      setDoc(doc(db, 'marketTrends', trend.commodity), {
-        ...trend,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockRegionalStats.map((stat, index) =>
-      setDoc(doc(db, 'regionalStats', `STAT-${index + 1}`), {
-        ...stat,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockNewsItems.map((item) =>
-      setDoc(doc(db, 'newsItems', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockAuctionListings.map((item) =>
-      setDoc(doc(db, 'auctionListings', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
-  await Promise.all(
-    mockMarketSaturation.map((item) =>
-      setDoc(doc(db, 'marketSaturation', item.id), {
-        ...item,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
-
   seeded = true;
 }
+
+
 
 export const publicMarketService = {
   async listMarketTrends(): Promise<MarketTrend[]> {
