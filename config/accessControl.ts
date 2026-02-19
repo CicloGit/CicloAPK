@@ -69,21 +69,57 @@ export const roleAccessConfig: Record<User['role'], ViewType[]> = {
   Fornecedor: ['dashboard', 'supplierPortal', 'stock', 'logistics', 'integrations', 'marketplace'],
   Operador: ['operatorPortal', 'liveHandling', 'marketplace'],
   Gestor: [...ADMIN_VISUALIZATION_VIEWS],
-  Integradora: ['dashboard', 'integratorPortal', 'contracts', 'financials', 'logistics', 'integrations', 'commercial'],
+  Integradora: [
+    'dashboard',
+    'integratorPortal',
+    'contracts',
+    'financials',
+    'logistics',
+    'integrations',
+    'commercial',
+  ],
   'Gestor de Trafego': [
     'dashboard',
     'supplierPortal',
     'logistics',
+    'legal',
     'financials',
     'operations',
     'eventsMatrix',
     'integrations',
-    'legal',
   ],
   Administrador: [...ADMIN_VISUALIZATION_VIEWS],
 };
 
-export const canAccessView = (user: User, view: ViewType): boolean => {
-  const roleViews = roleAccessConfig[user.role] ?? [];
-  return roleViews.includes(view);
+const normalizeRole = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+export const getRoleAccess = (role: string | null | undefined): ViewType[] => {
+  if (!role) {
+    return [];
+  }
+
+  const directRole = role as User['role'];
+  if (roleAccessConfig[directRole]) {
+    return roleAccessConfig[directRole];
+  }
+
+  const normalizedRole = normalizeRole(role);
+  const matchedRole = (Object.keys(roleAccessConfig) as User['role'][]).find(
+    (configuredRole) => normalizeRole(configuredRole) === normalizedRole
+  );
+
+  if (matchedRole) {
+    return roleAccessConfig[matchedRole];
+  }
+
+  return [];
 };
+
+export const canAccessView = (user: User, view: ViewType): boolean => {
+  return getRoleAccess(user.role).includes(view);
+};
+

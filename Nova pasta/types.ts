@@ -26,6 +26,7 @@ export type ViewType =
   'management' |
   'futureMarket' |
   'workforce' |
+  'marketplace' |
   'publicMarket' |
   'aiAnalysis' |
   'liveHandling' |
@@ -155,6 +156,7 @@ export interface User {
   name: string;
   role:
     | 'Produtor'
+    | 'Produtor de Sementes'
     | 'Gestor'
     | 'Técnico'
     | 'Investidor'
@@ -847,6 +849,5 @@ export interface SeedLot {
   purity: number; // percentage
   storageLocation: string;
 }
-
 
 
