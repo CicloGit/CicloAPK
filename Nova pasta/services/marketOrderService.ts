@@ -1,35 +1,33 @@
-import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db } from '../config/firebase';
-import { CartItem, SupplierOrder, SupplierOrderStatus } from '../types';
+﻿import { CartItem } from '../types';
+import { backendApi, ConsumerMarketChannel, EvidencePayload } from './backendApi';
 
 export type CheckoutPaymentMethod = 'pix' | 'boleto' | 'credit' | 'corporate';
 
-interface MarketplaceOrder {
-  id: string;
-  customer: string;
-  paymentMethod: CheckoutPaymentMethod;
-  transactionId: string;
-  totalValue: number;
-  fees: number;
-  grossValue: number;
-  status: 'PAID_ESCROW' | 'FAILED';
-  createdAtLabel: string;
-  items: {
-    listingId: string;
-    productName: string;
-    supplier: string;
-    quantity: number;
-    unitPrice: number;
-    source: 'LOCAL' | 'B2B';
-  }[];
-}
+const buildContractEvidence = (transactionId: string, listingId: string): EvidencePayload[] => [
+  {
+    type: 'TYPE_B',
+    documents: [
+      {
+        kind: 'DIGITAL_ACCEPTANCE',
+        hash: `ack-${transactionId}-${listingId}`,
+      },
+    ],
+  },
+];
 
-const marketplaceOrdersCollection = collection(db, 'marketplaceOrders');
+const resolveDomain = (item: CartItem): 'MARKETPLACE' | 'CONSUMER_MARKET' =>
+  item.listingCategory === 'OUTPUTS_PRODUCER'
+    ? 'CONSUMER_MARKET'
+    : item.source === 'LOCAL'
+      ? 'CONSUMER_MARKET'
+      : 'MARKETPLACE';
 
-const formatTodayBR = () => new Date().toLocaleDateString('pt-BR');
-
-const toSupplierStatus = (): SupplierOrderStatus => 'PENDENTE';
+const resolveChannel = (item: CartItem): ConsumerMarketChannel =>
+  item.listingCategory === 'OUTPUTS_PRODUCER'
+    ? 'WHOLESALE_DIRECT'
+    : item.source === 'LOCAL'
+      ? 'RETAIL_MARKETS'
+      : 'WHOLESALE_DIRECT';
 
 export const marketOrderService = {
   async createCheckout(cart: CartItem[], paymentMethod: CheckoutPaymentMethod): Promise<{ transactionId: string; orderIds: string[] }> {
@@ -37,78 +35,47 @@ export const marketOrderService = {
       throw new Error('Carrinho vazio.');
     }
 
-    const uid = getAuth().currentUser?.uid ?? 'anonymous';
-    const customer = getAuth().currentUser?.email ?? 'cliente@ciclo.plus';
-
-    const now = Date.now();
-    const transactionId = `TRX-${now}`;
-    const grossValue = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const fees = Number((grossValue * 0.01).toFixed(2));
-    const totalValue = Number((grossValue + fees).toFixed(2));
-
-    const groupedBySupplier = cart.reduce<Record<string, CartItem[]>>((acc, item) => {
-      acc[item.b2bSupplier] = acc[item.b2bSupplier] ?? [];
-      acc[item.b2bSupplier].push(item);
-      return acc;
-    }, {});
-
+    const transactionId = `TRX-${Date.now()}`;
     const supplierOrderIds: string[] = [];
-    const writes = Object.entries(groupedBySupplier).map(async ([supplier, supplierItems], index) => {
-      const orderId = `ORD-${now + index}`;
-      supplierOrderIds.push(orderId);
 
-      const supplierOrder: SupplierOrder = {
-        id: orderId,
-        customer,
-        items: supplierItems.map((item) => ({
-          productName: item.productName,
-          quantity: item.quantity,
-        })),
-        totalValue: Number(supplierItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)),
-        date: formatTodayBR(),
-        status: toSupplierStatus(),
-      };
+    for (const item of cart) {
+      const domain = resolveDomain(item);
+      const channel = resolveChannel(item);
 
-      await setDoc(doc(db, 'supplierOrders', orderId), {
-        ...supplierOrder,
-        supplier,
-        transactionId,
-        createdBy: uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    });
-
-    const marketplaceOrderId = `MKT-${now}`;
-    const marketplaceOrder: MarketplaceOrder = {
-      id: marketplaceOrderId,
-      customer,
-      paymentMethod,
-      transactionId,
-      totalValue,
-      fees,
-      grossValue,
-      status: 'PAID_ESCROW',
-      createdAtLabel: formatTodayBR(),
-      items: cart.map((item) => ({
+      const order = await backendApi.marketPlaceOrder({
         listingId: item.id,
-        productName: item.productName,
-        supplier: item.b2bSupplier,
+        listing: {
+          productName: item.productName,
+          b2bSupplier: item.b2bSupplier,
+          price: item.price,
+          availableQuantity: item.source === 'LOCAL' ? item.localStock : item.b2bStock,
+          listingCategory: item.listingCategory,
+          listingMode: item.listingMode,
+          status: 'PUBLISHED',
+        },
         quantity: item.quantity,
         unitPrice: item.price,
-        source: item.source,
-      })),
-    };
+        paymentMethod,
+        domain,
+        channel,
+        transactionId,
+      });
 
-    await Promise.all([
-      ...writes,
-      setDoc(doc(marketplaceOrdersCollection, marketplaceOrderId), {
-        ...marketplaceOrder,
-        createdBy: uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-    ]);
+      await backendApi.marketReserveStock({ orderId: order.orderId });
+
+      await backendApi.marketSignContract({
+        orderId: order.orderId,
+        contractTerms: 'Safe Deal - aceite digital de checkout',
+        evidences: buildContractEvidence(transactionId, item.id),
+      });
+
+      await backendApi.marketCreateEscrow({
+        orderId: order.orderId,
+        amount: Number((item.price * item.quantity).toFixed(2)),
+      });
+
+      supplierOrderIds.push(order.supplierOrderId);
+    }
 
     return {
       transactionId,

@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ProductionProject } from '../types';
 
@@ -13,11 +13,6 @@ export interface LiveHandlingEntry {
 
 const historyCollection = collection(db, 'liveHandlingHistory');
 const liveContextCollection = collection(db, 'liveHandlingContext');
-
-let seeded = false;
-
-const seedHistory: LiveHandlingEntry[] = [];
-
 const toHistory = (id: string, raw: Record<string, unknown>): LiveHandlingEntry => ({
   id,
   projectId: String(raw.projectId ?? ''),
@@ -41,34 +36,20 @@ const toProject = (id: string, raw: Record<string, unknown>): ProductionProject 
   limiteVigente: Number(raw.limiteVigente ?? 0),
   limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const liveHandlingService = {
   async listProjects(): Promise<ProductionProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(liveContextCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listHistory(): Promise<LiveHandlingEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async createEntry(payload: Omit<LiveHandlingEntry, 'id' | 'time'>): Promise<LiveHandlingEntry> {
-    await ensureSeedData();
     const newEntry: LiveHandlingEntry = {
       id: `LIVE-${Date.now()}`,
       projectId: payload.projectId,
@@ -87,3 +68,5 @@ export const liveHandlingService = {
     return newEntry;
   },
 };
+
+

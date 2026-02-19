@@ -8,6 +8,7 @@ import TruckIcon from '../icons/TruckIcon';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import { supplierService } from '../../services/supplierService';
 import { commercialService } from '../../services/commercialService';
+import { useApp } from '../../contexts/AppContext';
 import { MarketplaceListing, SupplierFinancialSummary, SupplierOrder, SupplierOrderStatus } from '../../types';
 
 type SupplierTab = 'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'FINANCE';
@@ -23,6 +24,7 @@ const StatusBadge: React.FC<{ status: SupplierOrderStatus }> = ({ status }) => {
 
 
 const SupplierDashboard: React.FC = () => {
+    const { currentUser } = useApp();
     const [activeTab, setActiveTab] = useState<SupplierTab>('OVERVIEW');
     const [orders, setOrders] = useState<SupplierOrder[]>([]);
     const [financials, setFinancials] = useState<SupplierFinancialSummary[]>([]);
@@ -40,7 +42,11 @@ const SupplierDashboard: React.FC = () => {
                 const [loadedOrders, loadedFinancials, loadedProducts] = await Promise.all([
                     supplierService.listOrders(),
                     supplierService.listFinancialSummaries(),
-                    commercialService.listMarketplaceListings(),
+                    commercialService.listMarketplaceListings({
+                        categories: ['INPUTS_INDUSTRY'],
+                        onlyOwnListings: true,
+                        ownerUserId: currentUser?.uid,
+                    }),
                 ]);
                 setOrders(loadedOrders);
                 setFinancials(loadedFinancials);
@@ -53,7 +59,7 @@ const SupplierDashboard: React.FC = () => {
         };
 
         void loadSupplier();
-    }, []);
+    }, [currentUser?.uid]);
 
     const handleShipOrder = async (orderId: string) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'ENVIADO' } : o));

@@ -1,4 +1,3 @@
-
 export type ViewType = 
   'dashboard' | 
   'architecture' | 
@@ -142,9 +141,55 @@ export interface FinancialDetails {
 export interface User {
   uid?: string;
   email?: string;
+  tenantId?: string;
+  producerScopes?: ProducerScopes;
+  claimsRole?: ClaimsRole | null;
+  profileType?: AccessProfileType;
+  documentType?: DocumentType;
+  documentNumber?: string;
+  stateRegistration?: string;
+  specialty?: string;
+  councilType?: CouncilType;
+  councilNumber?: string;
+  simulationOnly?: boolean;
   name: string;
-  role: 'Produtor' | 'Gestor' | 'Técnico' | 'Investidor' | 'Fornecedor' | 'Integradora' | 'Operador' | 'Produtor de Sementes';
+  role:
+    | 'Produtor'
+    | 'Gestor'
+    | 'Técnico'
+    | 'Investidor'
+    | 'Fornecedor'
+    | 'Integradora'
+    | 'Operador'
+    | 'Gestor de Trafego'
+    | 'Administrador';
 }
+
+export type AccessProfileType =
+  | 'PRODUTOR'
+  | 'EMPRESA_FORNECEDORA'
+  | 'EMPRESA_INTEGRADORA'
+  | 'OPERADOR'
+  | 'TECNICO'
+  | 'GESTOR';
+
+export type DocumentType = 'CPF' | 'CNPJ' | 'LOGIN';
+export type CouncilType = 'CRMV' | 'CFTA' | 'CREA';
+
+export interface ProducerScopes {
+  seedProducer?: boolean;
+}
+
+export type ClaimsRole =
+  | 'PRODUCER'
+  | 'SUPPLIER'
+  | 'INTEGRATOR'
+  | 'TECHNICIAN'
+  | 'INVESTOR'
+  | 'MANAGER'
+  | 'TRAFFIC_MANAGER'
+  | 'ADMIN'
+  | 'OPERATOR';
 
 // UPCL - Universal Payment & Clearing Logic Types
 export type TransactionType = 'PIX_IN' | 'PIX_OUT' | 'COMMISSION' | 'SALE' | 'PURCHASE' | 'SPLIT';
@@ -301,12 +346,17 @@ export interface ProductFactor {
 }
 
 export type SalesOfferStatus = 'ATIVA' | 'VENDIDO' | 'CANCELADA';
+export type ConsumerMarketChannel = 'WHOLESALE_DIRECT' | 'RETAIL_MARKETS';
+export type ListingCategory = 'OUTPUTS_PRODUCER' | 'INPUTS_INDUSTRY' | 'AUCTION_P2P';
+export type ListingMode = 'FIXED_PRICE' | 'AUCTION';
+export type ListingPriceModel = 'FIXED' | 'TIERED' | 'QUOTE_REQUIRED' | 'AUCTION';
 
 export interface SalesOffer {
     id: string;
     product: string;
     quantity: string;
     price: number;
+    channel?: ConsumerMarketChannel;
     status: SalesOfferStatus;
     date: string;
 }
@@ -355,10 +405,23 @@ export interface PartnerStore {
 
 export interface MarketplaceListing {
     id: string;
+    tenantId?: string;
+    createdByUserId?: string;
+    listingCategory: ListingCategory;
+    listingMode: ListingMode;
     productName: string;
+    productType?: string;
+    sector?: string;
+    productionSector?: string;
     b2bSupplier: string; // The main industry/distributor
     price: number;
+    priceModel?: ListingPriceModel;
     unit: string;
+    quantityAvailable?: number;
+    region?: string;
+    status?: 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
+    createdAt?: string;
+    updatedAt?: string;
     rating: number;
     category: string;
     isPartnerStore: boolean; // Is the B2B supplier a direct partner?
@@ -535,6 +598,46 @@ export interface MarketSaturation {
     averageContractPrice: number;
     averageRealizedPrice: number;
     marketAveragePrice: number;
+}
+
+export type PublicMarketPriceCategory = 'COMMODITY' | 'LIVESTOCK' | 'INPUT';
+
+export interface PublicMarketPriceItem {
+    symbol: string;
+    category: PublicMarketPriceCategory;
+    name: string;
+    unit: string;
+    currency: string;
+    price: number;
+    change1d: number;
+    change7d: number;
+    change30d: number;
+    source?: string;
+    sourceRef?: string;
+    region?: string;
+    updatedAt?: string | null;
+}
+
+export interface PublicInputCostIndex {
+    window7d: number;
+    window30d: number;
+    componentsUsed: Array<{
+        symbol: string;
+        weight: number;
+        change7d: number;
+        change30d: number;
+    }>;
+    staleComponents: string[];
+    updatedAt?: string | null;
+}
+
+export interface PublicMarketSummary {
+    updatedAt: string;
+    countsByCategory: Record<PublicMarketPriceCategory, number>;
+    topCommodities: PublicMarketPriceItem[];
+    topLivestock: PublicMarketPriceItem[];
+    topInputs: PublicMarketPriceItem[];
+    inputCostIndex: PublicInputCostIndex | null;
 }
 
 export interface CorporateCard {
@@ -744,3 +847,6 @@ export interface SeedLot {
   purity: number; // percentage
   storageLocation: string;
 }
+
+
+

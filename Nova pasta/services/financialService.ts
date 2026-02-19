@@ -1,5 +1,6 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { backendApi } from './backendApi';
 import { parseDateToTimestamp } from './dateUtils';
 import { BankAccount, Expense, Receivable, Transaction } from '../types';
 
@@ -7,9 +8,6 @@ const accountCollection = collection(db, 'bankAccounts');
 const receivableCollection = collection(db, 'receivables');
 const expenseCollection = collection(db, 'expenses');
 const transactionCollection = collection(db, 'transactions');
-
-let seeded = false;
-
 export const financialSplitConfig = {
   platformFeeRate: 0.05,
   logisticsRate: 0.08,
@@ -70,20 +68,8 @@ const toTransaction = (id: string, raw: Record<string, unknown>): Transaction =>
   counterparty: raw.counterparty ? String(raw.counterparty) : undefined,
   documentUrl: raw.documentUrl ? String(raw.documentUrl) : undefined,
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const financialService = {
   async listReceivables(): Promise<Receivable[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(receivableCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toReceivable(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -91,7 +77,6 @@ export const financialService = {
   },
 
   async listExpenses(): Promise<Expense[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(expenseCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toExpense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -99,7 +84,6 @@ export const financialService = {
   },
 
   async listBankAccounts(): Promise<BankAccount[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(accountCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toBankAccount(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -107,7 +91,6 @@ export const financialService = {
   },
 
   async listTransactions(accountId?: string): Promise<Transaction[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(transactionCollection);
     const allItems: Transaction[] = snapshot.docs.map((docSnapshot: any) =>
       toTransaction(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
@@ -118,7 +101,6 @@ export const financialService = {
   },
 
   async getReceivableById(receivableId: string): Promise<Receivable | null> {
-    await ensureSeedData();
     const snapshot = await getDoc(doc(db, 'receivables', receivableId));
     if (!snapshot.exists()) {
       return null;
@@ -127,7 +109,23 @@ export const financialService = {
   },
 
   async markReceivableAsLiquidated(receivableId: string): Promise<void> {
-    await ensureSeedData();
+
+    const receivableSnapshot = await getDoc(doc(db, 'receivables', receivableId));
+    if (receivableSnapshot.exists()) {
+      const raw = receivableSnapshot.data() as Record<string, unknown>;
+      const orderId = String(raw.marketOrderId ?? '').trim();
+      const settlementId = String(raw.settlementId ?? '').trim();
+      const amount = Number(raw.value ?? 0);
+
+      if (orderId || settlementId) {
+        await backendApi.marketReleaseSettlement({
+          orderId: orderId || undefined,
+          settlementId: settlementId || undefined,
+          amount: Number.isFinite(amount) ? amount : undefined,
+        });
+      }
+    }
+
     await setDoc(
       doc(db, 'receivables', receivableId),
       {
@@ -138,3 +136,4 @@ export const financialService = {
     );
   },
 };
+

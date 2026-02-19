@@ -1,12 +1,10 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { SupplierFinancialSummary, SupplierOrder } from '../types';
+import { backendApi, EvidencePayload } from './backendApi';
 
 const supplierOrdersCollection = collection(db, 'supplierOrders');
 const supplierFinancialsCollection = collection(db, 'supplierFinancials');
-
-let seeded = false;
-
 const toSupplierOrder = (id: string, raw: Record<string, unknown>): SupplierOrder => ({
   id,
   customer: String(raw.customer ?? ''),
@@ -23,37 +21,27 @@ const toSupplierFinancial = (id: string, raw: Record<string, unknown>): Supplier
   netPayout: Number(raw.netPayout ?? 0),
   status: (raw.status as SupplierFinancialSummary['status']) ?? 'A PAGAR',
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const supplierService = {
   async listOrders(): Promise<SupplierOrder[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(supplierOrdersCollection);
-    return snapshot.docs
-      .map((docSnapshot: any) => toSupplierOrder(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    return snapshot.docs.map((docSnapshot: any) => toSupplierOrder(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listFinancialSummaries(): Promise<SupplierFinancialSummary[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(supplierFinancialsCollection);
-    return snapshot.docs
-      .map((docSnapshot: any) => toSupplierFinancial(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    return snapshot.docs.map((docSnapshot: any) => toSupplierFinancial(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
-  async markOrderShipped(orderId: string): Promise<void> {
-    await ensureSeedData();
-    await updateDoc(doc(db, 'supplierOrders', orderId), {
-      status: 'ENVIADO',
-      updatedAt: serverTimestamp(),
+  async markOrderShipped(orderId: string, evidences?: EvidencePayload[]): Promise<void> {
+
+    await backendApi.marketConfirmDispatch({
+      supplierOrderId: orderId,
+      evidences,
+      telemetry: {
+        source: 'supplier-dashboard-manual-dispatch',
+        capturedAt: new Date().toISOString(),
+      },
     });
   },
 };
+

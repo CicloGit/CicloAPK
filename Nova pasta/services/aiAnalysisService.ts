@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   getDocs,
   limit,
@@ -26,16 +26,6 @@ export interface AIAnalysisRecord {
 }
 
 const analysesCollection = collection(db, 'aiAnalyses');
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
 const toAnalysisRecord = (id: string, raw: Record<string, unknown>): AIAnalysisRecord => ({
   id,
   imageName: raw.imageName ? String(raw.imageName) : undefined,
@@ -51,7 +41,6 @@ const toAnalysisRecord = (id: string, raw: Record<string, unknown>): AIAnalysisR
 
 export const aiAnalysisService = {
   async listAnalyses(): Promise<AIAnalysisRecord[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(analysesCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toAnalysisRecord(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
@@ -69,3 +58,4 @@ export const aiAnalysisService = {
     };
   },
 };
+

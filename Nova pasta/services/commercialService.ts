@@ -3,9 +3,10 @@ import {
   getDocs,
   orderBy,
   query,
+  where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { CorporateCard, MarketplaceListing, PartnerStore } from '../types';
+import { CorporateCard, ListingCategory, ListingMode, MarketplaceListing, PartnerStore } from '../types';
 import { parseDateToTimestamp } from './dateUtils';
 
 const marketplaceCollection = collection(db, 'marketplaceListings');
@@ -13,20 +14,70 @@ const corporateCardCollection = collection(db, 'corporateCards');
 const partnerStoreCollection = collection(db, 'partnerStores');
 const marketplaceOrdersCollection = collection(db, 'marketplaceOrders');
 
-const toMarketplaceListing = (id: string, raw: Record<string, unknown>): MarketplaceListing => ({
-  id,
-  productName: String(raw.productName ?? ''),
-  b2bSupplier: String(raw.b2bSupplier ?? ''),
-  price: Number(raw.price ?? 0),
-  unit: String(raw.unit ?? ''),
-  rating: Number(raw.rating ?? 0),
-  category: String(raw.category ?? ''),
-  isPartnerStore: Boolean(raw.isPartnerStore),
-  localPartnerStoreId: String(raw.localPartnerStoreId ?? ''),
-  localStock: Number(raw.localStock ?? 0),
-  b2bStock: Number(raw.b2bStock ?? 0),
-  deliveryTimeB2B: String(raw.deliveryTimeB2B ?? ''),
-});
+export interface MarketplaceListingsQueryOptions {
+  categories?: ListingCategory[];
+  requirePublished?: boolean;
+  onlyOwnListings?: boolean;
+  ownerUserId?: string;
+}
+
+const normalizeListingCategory = (raw: Record<string, unknown>): ListingCategory => {
+  const source = String(raw.listingCategory ?? raw.category ?? '').trim().toUpperCase();
+  if (source === 'INPUTS_INDUSTRY') {
+    return 'INPUTS_INDUSTRY';
+  }
+  if (source === 'AUCTION_P2P') {
+    return 'AUCTION_P2P';
+  }
+  return 'OUTPUTS_PRODUCER';
+};
+
+const normalizeListingMode = (raw: Record<string, unknown>, category: ListingCategory): ListingMode => {
+  if (category === 'AUCTION_P2P') {
+    return 'AUCTION';
+  }
+  return String(raw.listingMode ?? '').trim().toUpperCase() === 'AUCTION' ? 'AUCTION' : 'FIXED_PRICE';
+};
+
+const toMarketplaceListing = (id: string, raw: Record<string, unknown>): MarketplaceListing => {
+  const listingCategory = normalizeListingCategory(raw);
+  return {
+    id,
+    tenantId: String(raw.tenantId ?? ''),
+    createdByUserId: String(raw.createdByUserId ?? raw.createdBy ?? ''),
+    listingCategory,
+    listingMode: normalizeListingMode(raw, listingCategory),
+    productName: String(raw.productName ?? ''),
+    productType: String(raw.productType ?? raw.category ?? ''),
+    sector: String(raw.sector ?? ''),
+    productionSector: String(raw.productionSector ?? ''),
+    b2bSupplier: String(raw.b2bSupplier ?? raw.supplierName ?? ''),
+    price: Number(raw.price ?? 0),
+    priceModel:
+      String(raw.priceModel ?? '').trim().toUpperCase() === 'TIERED'
+        ? 'TIERED'
+        : String(raw.priceModel ?? '').trim().toUpperCase() === 'QUOTE_REQUIRED'
+          ? 'QUOTE_REQUIRED'
+          : String(raw.priceModel ?? '').trim().toUpperCase() === 'AUCTION'
+            ? 'AUCTION'
+            : 'FIXED',
+    unit: String(raw.unit ?? ''),
+    quantityAvailable: Number(raw.quantityAvailable ?? raw.b2bStock ?? 0),
+    region: String(raw.region ?? ''),
+    status: String(raw.status ?? 'DRAFT') as MarketplaceListing['status'],
+    createdAt: String(raw.createdAtIso ?? ''),
+    updatedAt: String(raw.updatedAtIso ?? ''),
+    rating: Number(raw.rating ?? 0),
+    category: String(raw.category ?? ''),
+    isPartnerStore: Boolean(raw.isPartnerStore),
+
+    // Dual-stock compatibility
+    localPartnerStoreId: String(raw.localPartnerStoreId ?? ''),
+    localStock: Number(raw.localStock ?? 0),
+    b2bStock: Number(raw.b2bStock ?? raw.quantityAvailable ?? 0),
+    deliveryTimeB2B: String(raw.deliveryTimeB2B ?? ''),
+  };
+};
 
 const toCorporateCard = (id: string, raw: Record<string, unknown>): CorporateCard => ({
   id,
@@ -52,9 +103,31 @@ export interface MarketplaceOrderHistory {
   date: string;
 }
 
+const buildMarketplaceListingQuery = (options: MarketplaceListingsQueryOptions): Array<ReturnType<typeof where>> => {
+  const constraints: Array<ReturnType<typeof where>> = [];
+
+  if (options.requirePublished !== false) {
+    constraints.push(where('status', '==', 'PUBLISHED'));
+  }
+
+  if (Array.isArray(options.categories) && options.categories.length === 1) {
+    constraints.push(where('listingCategory', '==', options.categories[0]));
+  } else if (Array.isArray(options.categories) && options.categories.length > 1) {
+    constraints.push(where('listingCategory', 'in', options.categories.slice(0, 10)));
+  }
+
+  if (options.onlyOwnListings && options.ownerUserId) {
+    constraints.push(where('createdByUserId', '==', options.ownerUserId));
+  }
+
+  return constraints;
+};
+
 export const commercialService = {
-  async listMarketplaceListings(): Promise<MarketplaceListing[]> {
-    const snapshot = await getDocs(marketplaceCollection);
+  async listMarketplaceListings(options: MarketplaceListingsQueryOptions = {}): Promise<MarketplaceListing[]> {
+    const constraints = buildMarketplaceListingQuery(options);
+    const marketplaceQuery = constraints.length > 0 ? query(marketplaceCollection, ...constraints) : marketplaceCollection;
+    const snapshot = await getDocs(marketplaceQuery);
     return snapshot.docs
       .map((docSnapshot: any) => toMarketplaceListing(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: MarketplaceListing, b: MarketplaceListing) => a.productName.localeCompare(b.productName));

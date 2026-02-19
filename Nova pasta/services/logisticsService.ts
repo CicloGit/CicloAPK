@@ -1,11 +1,8 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { LogisticsEntry } from '../types';
 
 const logisticsCollection = collection(db, 'logisticsEntries');
-
-let seeded = false;
-
 const toLogisticsEntry = (id: string, raw: Record<string, unknown>): LogisticsEntry => ({
   id,
   type: (raw.type as LogisticsEntry['type']) ?? 'Entrega',
@@ -17,23 +14,12 @@ const toLogisticsEntry = (id: string, raw: Record<string, unknown>): LogisticsEn
   driver: raw.driver ? String(raw.driver) : undefined,
   plate: raw.plate ? String(raw.plate) : undefined,
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const logisticsService = {
   async listEntries(): Promise<LogisticsEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(logisticsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toLogisticsEntry(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: LogisticsEntry, b: LogisticsEntry) => a.date.localeCompare(b.date));
   },
 };
+

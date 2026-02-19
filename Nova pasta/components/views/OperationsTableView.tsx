@@ -36,7 +36,7 @@ const OperationsTableView: React.FC = () => {
   return (
     <div>
       <h2 className="text-3xl font-bold text-slate-800 mb-2">Tabela de Operacoes v1</h2>
-      <p className="text-slate-600 mb-8">Detalhes sobre cada operacao, perfil de usuario, regras de negocio, evidencias necessarias e os efeitos no sistema.</p>
+      <p className="text-slate-600 mb-8">Marketplace + Venda Mercado Consumidor com Kernel de enforcement (Auth/RBAC/Tenant, evidencias, auditoria e settlement).</p>
 
       <div className="bg-white rounded-lg shadow-md overflow-x-auto">
         <table className="w-full text-sm text-left text-slate-600">

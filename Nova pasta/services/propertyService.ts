@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   deleteDoc,
   doc,
@@ -37,9 +37,6 @@ const EMPTY_PROPERTY_TEMPLATE: Property = {
   perimeter: [],
   satelliteImageUrl: '',
 };
-
-let seeded = false;
-
 const buildEmptyProperty = (id: string = DEFAULT_PROPERTY_ID): Property => ({
   ...EMPTY_PROPERTY_TEMPLATE,
   id,
@@ -136,16 +133,6 @@ const estimateAreaFromPoints = (points: { lat: string; long: string }[]): number
   const estimatedHectare = absolute * hectareFactor;
   return Number(Math.max(estimatedHectare, 1).toFixed(2));
 };
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 async function resolvePrimaryPropertyId(defaultPropertyId: string = DEFAULT_PROPERTY_ID): Promise<string> {
   const snapshot = await getDocs(query(propertyCollection, limit(1)));
   if (snapshot.empty) {
@@ -161,7 +148,6 @@ export const propertyService = {
   },
 
   async listProductionProjects(): Promise<ProductionProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectCollection);
     return snapshot.docs
       .filter((docSnapshot: any) => !isProjectDeleted(docSnapshot.data() as Record<string, unknown>))
@@ -172,7 +158,6 @@ export const propertyService = {
   async loadWorkspace(
     propertyId: string = DEFAULT_PROPERTY_ID
   ): Promise<{ property: Property; activities: ProductionProject[]; pastures: Pasture[] }> {
-    await ensureSeedData();
 
     const resolvedPropertyId = propertyId || DEFAULT_PROPERTY_ID;
 
@@ -228,8 +213,6 @@ export const propertyService = {
       return { success: false, message: validation.error };
     }
 
-    await ensureSeedData();
-
     const { name, points } = divisionData;
     const polygonPoints = normalizePointToCanvas(points);
     const estimatedArea = estimateAreaFromPoints(points);
@@ -278,8 +261,6 @@ export const propertyService = {
       return { success: false, message: validation.error };
     }
 
-    await ensureSeedData();
-
     const newProject: ProductionProject = {
       id: `PROJ-${Date.now()}`,
       name: activityData.name,
@@ -313,8 +294,6 @@ export const propertyService = {
     if (!validation.success) {
       return validation;
     }
-
-    await ensureSeedData();
     const targetPropertyId = propertyData.id || (await resolvePrimaryPropertyId());
     await setDoc(
       doc(db, 'properties', targetPropertyId),
@@ -339,7 +318,6 @@ export const propertyService = {
     }
 
     try {
-      await ensureSeedData();
       await deleteDoc(doc(db, 'productionProjects', activityId));
       return { success: true };
     } catch {
@@ -372,3 +350,4 @@ export const propertyService = {
     };
   },
 };
+

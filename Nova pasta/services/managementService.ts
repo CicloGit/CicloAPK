@@ -1,12 +1,9 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ManagementAlert, ManagementRecord } from '../types';
 
 const alertsCollection = collection(db, 'managementAlerts');
 const historyCollection = collection(db, 'managementHistory');
-
-let seeded = false;
-
 const toAlert = (id: string, raw: Record<string, unknown>): ManagementAlert => ({
   id,
   target: String(raw.target ?? ''),
@@ -26,20 +23,8 @@ const toHistory = (id: string, raw: Record<string, unknown>): ManagementRecord =
   quantity: String(raw.quantity ?? ''),
   executor: String(raw.executor ?? ''),
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const managementService = {
   async listAlerts(): Promise<ManagementAlert[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(alertsCollection);
     return snapshot.docs
       .filter((docSnapshot: any) => !(docSnapshot.data() as Record<string, unknown>).resolved)
@@ -47,14 +32,12 @@ export const managementService = {
   },
 
   async listHistory(): Promise<ManagementRecord[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
     return snapshot.docs
       .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async createHistoryRecord(data: Omit<ManagementRecord, 'id' | 'date'>): Promise<ManagementRecord> {
-    await ensureSeedData();
     const newRecord: ManagementRecord = {
       id: `HIST-${Date.now()}`,
       date: new Date().toLocaleDateString('pt-BR'),
@@ -75,10 +58,10 @@ export const managementService = {
   },
 
   async resolveAlert(alertId: string): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'managementAlerts', alertId), {
       resolved: true,
       updatedAt: serverTimestamp(),
     });
   },
 };
+

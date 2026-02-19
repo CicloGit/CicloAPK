@@ -6,8 +6,121 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    match /stock-loss-proofs/{allPaths=**} {
-      allow read, write: if signedIn();
+    function hasUserDoc() {
+      return signedIn() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function currentRole() {
+      return hasUserDoc()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function claimRole() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : null;
+    }
+
+    function currentTenantId() {
+      return hasUserDoc()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.tenantId
+        : null;
+    }
+
+    function claimTenantId() {
+      return signedIn() && request.auth.token.tenantId is string
+        ? request.auth.token.tenantId
+        : null;
+    }
+
+    function hasTenantAccess(tenantId) {
+      return signedIn() && (
+        claimTenantId() == tenantId ||
+        // Transitional fallback (1 release) while all users receive custom claims.
+        (hasUserDoc() && currentTenantId() == tenantId)
+      );
+    }
+
+    function isSeedProducer() {
+      return signedIn()
+        && claimRole() == 'PRODUCER'
+        && request.auth.token.producerScopes is map
+        && request.auth.token.producerScopes.seedProducer == true;
+    }
+
+    function isProducerRole() {
+      return claimRole() == 'PRODUCER' || currentRole() == 'Produtor';
+    }
+
+    function isSupplierRole() {
+      return claimRole() == 'SUPPLIER' || currentRole() == 'Fornecedor';
+    }
+
+    function isIntegratorRole() {
+      return claimRole() == 'INTEGRATOR' || currentRole() == 'Integradora';
+    }
+
+    function isManagerRole() {
+      return claimRole() == 'MANAGER' || currentRole() == 'Gestor';
+    }
+
+    function isTrafficManagerRole() {
+      return claimRole() == 'TRAFFIC_MANAGER' || currentRole() == 'Gestor de Trafego';
+    }
+
+    function isOperatorRole() {
+      return claimRole() == 'OPERATOR' || currentRole() == 'Operador';
+    }
+
+    function isAdminRole() {
+      return claimRole() == 'ADMIN' || currentRole() == 'Administrador';
+    }
+
+    function canWriteStockLossProof(tenantId) {
+      return hasTenantAccess(tenantId) && (
+        isProducerRole() ||
+        isManagerRole() ||
+        isOperatorRole() ||
+        isAdminRole()
+      );
+    }
+
+    function canWriteEvidence(tenantId) {
+      return hasTenantAccess(tenantId) && (
+        isProducerRole() ||
+        isSupplierRole() ||
+        isManagerRole() ||
+        isIntegratorRole() ||
+        isAdminRole()
+      );
+    }
+
+    function canWriteSupport(tenantId) {
+      return hasTenantAccess(tenantId) && (
+        isManagerRole() ||
+        isTrafficManagerRole() ||
+        isAdminRole()
+      );
+    }
+
+    match /stock-loss-proofs/{tenantId}/{movementRef}/{allPaths=**} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if canWriteStockLossProof(tenantId);
+    }
+
+    match /evidences/{tenantId}/{txId}/{evidenceId}/{allPaths=**} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if canWriteEvidence(tenantId);
+    }
+
+    match /support/{tenantId}/{ticketId}/{allPaths=**} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if canWriteSupport(tenantId);
+    }
+
+    match /seeds/{tenantId}/{allPaths=**} {
+      allow read, write: if false;
     }
 
     match /{allPaths=**} {

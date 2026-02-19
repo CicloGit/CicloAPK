@@ -36,7 +36,7 @@ const DataDictionaryView: React.FC = () => {
   return (
     <div>
       <h2 className="text-3xl font-bold text-slate-800 mb-2">Dicionario de Dados</h2>
-      <p className="text-slate-600 mb-8">Entidades e seus campos minimos, conforme extraido da documentacao.</p>
+      <p className="text-slate-600 mb-8">Entidades tenantizadas e campos minimos do ciclo Marketplace + Venda Mercado Consumidor.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {entities.map((entity) => (

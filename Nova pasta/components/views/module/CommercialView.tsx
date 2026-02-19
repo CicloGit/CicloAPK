@@ -12,11 +12,19 @@ import SearchIcon from '../../icons/SearchIcon';
 import FilterIcon from '../../icons/FilterIcon';
 import { CubeIcon } from '../../icons/CubeIcon';
 import { useToast } from '../../../contexts/ToastContext';
+import { useApp } from '../../../contexts/AppContext';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import { commercialService, MarketplaceOrderHistory } from '../../../services/commercialService';
 import { marketOrderService } from '../../../services/marketOrderService';
+import {
+    getDefaultMarketplaceTab,
+    getMarketplaceTabsForPersona,
+    getMarketplaceVisibleCategories,
+    MarketplaceActiveTab,
+} from '../../../services/marketplaceVisibilityService';
 
 const CommercialView: React.FC = () => {
+    const { currentUser } = useApp();
     const { addToast } = useToast();
     const [cart, setCart] = useState<CartItem[]>([]);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -37,14 +45,44 @@ const CommercialView: React.FC = () => {
     const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
 
     const [orders, setOrders] = useState<MarketplaceOrderHistory[]>([]);
+    const marketplaceTabs = useMemo(
+        () => getMarketplaceTabsForPersona(currentUser?.role, currentUser?.claimsRole),
+        [currentUser?.role, currentUser?.claimsRole]
+    );
+    const [activeTab, setActiveTab] = useState<MarketplaceActiveTab>(() =>
+        getDefaultMarketplaceTab(currentUser?.role, currentUser?.claimsRole)
+    );
+
+    useEffect(() => {
+        if (!marketplaceTabs.some((tab) => tab.id === activeTab)) {
+            setActiveTab(marketplaceTabs[0]?.id ?? 'INPUTS');
+        }
+    }, [marketplaceTabs, activeTab]);
+
+    const allowedCategories = useMemo(
+        () =>
+            getMarketplaceVisibleCategories({
+                role: currentUser?.role,
+                claimsRole: currentUser?.claimsRole,
+                activeTab,
+            }),
+        [currentUser?.role, currentUser?.claimsRole, activeTab]
+    );
+    const activeTabMeta = marketplaceTabs.find((tab) => tab.id === activeTab) ?? marketplaceTabs[0];
 
     useEffect(() => {
         const loadCommercialData = async () => {
             setIsLoading(true);
             setLoadError(null);
             try {
+                const isSupplierPersona = currentUser?.role === 'Fornecedor' || currentUser?.claimsRole === 'SUPPLIER';
                 const [loadedListings, loadedCards, loadedStores] = await Promise.all([
-                    commercialService.listMarketplaceListings(),
+                    commercialService.listMarketplaceListings({
+                        categories: allowedCategories,
+                        requirePublished: true,
+                        onlyOwnListings: isSupplierPersona,
+                        ownerUserId: currentUser?.uid,
+                    }),
                     commercialService.listCorporateCards(),
                     commercialService.listPartnerStores()
                 ]);
@@ -64,10 +102,23 @@ const CommercialView: React.FC = () => {
         };
 
         void loadCommercialData();
-    }, []);
+    }, [activeTab, allowedCategories, currentUser?.uid, currentUser?.role, currentUser?.claimsRole]);
+
+    useEffect(() => {
+        setSelectedCategory('Todos');
+    }, [activeTab]);
 
     // Categories derived from data
-    const categories = ['Todos', ...Array.from(new Set(marketplaceListings.map(item => item.category)))];
+    const categories = [
+        'Todos',
+        ...Array.from(
+            new Set(
+                marketplaceListings
+                    .map(item => item.productType || item.category || item.listingCategory)
+                    .filter(Boolean)
+            )
+        ),
+    ];
 
     const addToCart = (item: MarketplaceListing) => {
         setCart(prev => {
@@ -150,7 +201,8 @@ const CommercialView: React.FC = () => {
         return listingsWithLocation.filter(item => {
             const matchesSearch = item.productName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                   item.b2bSupplier.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory;
+            const itemCategory = item.productType || item.category || item.listingCategory;
+            const matchesCategory = selectedCategory === 'Todos' || itemCategory === selectedCategory;
             return matchesSearch && matchesCategory;
         }).sort((a, b) => {
             // Priority logic: Items in user location come first, then sort by selected criteria
@@ -182,7 +234,8 @@ const CommercialView: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-800 mb-1">Marketplace B2B</h2>
+                    <h2 className="text-3xl font-bold text-slate-800 mb-1">Marketplace</h2>
+                    <p className="text-slate-600 text-sm mb-2">{activeTabMeta?.description}</p>
                     <p className="text-slate-600 flex items-center text-sm">
                         <span className="mr-2">Localização do Produtor:</span>
                         <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">{userLocation}</span>
@@ -200,6 +253,23 @@ const CommercialView: React.FC = () => {
                         </span>
                     )}
                 </button>
+            </div>
+
+            {/* Persona Tabs */}
+            <div className="flex flex-wrap gap-2 mb-6">
+                {marketplaceTabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                            activeTab === tab.id
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
             {/* Search and Filter Bar */}
@@ -266,7 +336,7 @@ const CommercialView: React.FC = () => {
                             </div>
                             <div className="p-4">
                                 <div className="mb-2">
-                                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">{item.category}</span>
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">{item.listingCategory}</span>
                                     <h4 className="font-bold text-lg text-slate-800 leading-tight">{item.productName}</h4>
                                 </div>
                                 <p className="text-xs text-slate-500 mb-3 flex items-center justify-between">
@@ -277,12 +347,22 @@ const CommercialView: React.FC = () => {
                                     <span className="text-emerald-600 font-bold text-xl">R$ {item.price.toFixed(2)}</span>
                                     <span className="text-xs text-slate-500">/ {item.unit}</span>
                                 </div>
+                                {item.listingMode === 'AUCTION' && (
+                                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                                        Oferta em leilao: este item segue fluxo de lance (AUCTION_BID_PLACE).
+                                    </p>
+                                )}
                                 <button 
                                     onClick={() => addToCart(item)}
-                                    className="w-full py-2 bg-slate-800 text-white rounded-md font-semibold hover:bg-slate-700 transition-colors flex justify-center items-center text-sm shadow-sm"
+                                    disabled={item.listingMode === 'AUCTION'}
+                                    className={`w-full py-2 rounded-md font-semibold transition-colors flex justify-center items-center text-sm shadow-sm ${
+                                        item.listingMode === 'AUCTION'
+                                            ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                                            : 'bg-slate-800 text-white hover:bg-slate-700'
+                                    }`}
                                 >
                                     <ShoppingCartIcon className="h-4 w-4 mr-2" />
-                                    Adicionar ao Carrinho
+                                    {item.listingMode === 'AUCTION' ? 'Fluxo de Leilao' : 'Adicionar ao Carrinho'}
                                 </button>
                             </div>
                         </div>

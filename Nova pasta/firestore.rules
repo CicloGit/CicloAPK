@@ -19,7 +19,103 @@ service cloud.firestore {
     }
 
     function hasAnyRole() {
-      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Produtor de Sementes', 'Integradora', 'Fornecedor', 'Técnico', 'Investidor'];
+      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Integradora', 'Fornecedor', 'Técnico', 'Tecnico', 'Investidor', 'Gestor de Trafego', 'Administrador'];
+    }
+
+    function claimRole() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : null;
+    }
+
+    function claimTenantId() {
+      return signedIn() && request.auth.token.tenantId is string
+        ? request.auth.token.tenantId
+        : null;
+    }
+
+    function currentTenantId() {
+      return hasUserDoc() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId : null;
+    }
+
+    function hasTenantAccess(tenantId) {
+      return signedIn() && (
+        claimTenantId() == tenantId ||
+        // Transitional fallback (1 release) while all users receive custom claims.
+        (hasUserDoc() && currentTenantId() == tenantId)
+      );
+    }
+
+    function isSeedProducer() {
+      return signedIn()
+        && claimRole() == 'PRODUCER'
+        && request.auth.token.producerScopes is map
+        && request.auth.token.producerScopes.seedProducer == true;
+    }
+
+    function isProducerRole() {
+      return signedIn() && (
+        claimRole() == 'PRODUCER' ||
+        (hasUserDoc() && currentRole() == 'Produtor')
+      );
+    }
+
+    function isSupplierRole() {
+      return signedIn() && (
+        claimRole() == 'SUPPLIER' ||
+        (hasUserDoc() && currentRole() == 'Fornecedor')
+      );
+    }
+
+    function isIntegratorRole() {
+      return signedIn() && (
+        claimRole() == 'INTEGRATOR' ||
+        (hasUserDoc() && currentRole() == 'Integradora')
+      );
+    }
+
+    function isManagerRole() {
+      return signedIn() && (
+        claimRole() == 'MANAGER' ||
+        (hasUserDoc() && currentRole() == 'Gestor')
+      );
+    }
+
+    function isAdminRole() {
+      return signedIn() && (
+        claimRole() == 'ADMIN' ||
+        (hasUserDoc() && currentRole() == 'Administrador')
+      );
+    }
+
+    function listingCategoryValid(data) {
+      return data.listingCategory is string
+        && data.listingCategory in ['OUTPUTS_PRODUCER', 'INPUTS_INDUSTRY', 'AUCTION_P2P'];
+    }
+
+    function listingModeValidForCategory(data) {
+      return !(data.listingCategory == 'AUCTION_P2P')
+        || (data.listingMode is string && data.listingMode == 'AUCTION');
+    }
+
+    function listingStatusValid(data) {
+      return !(data.status is string) || data.status in ['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED'];
+    }
+
+    function listingStatusTransitionAllowed() {
+      return request.resource.data.status == resource.data.status
+        || request.resource.data.status in ['PUBLISHED', 'PAUSED', 'CLOSED'];
+    }
+
+    function listingCategoryImmutable() {
+      return request.resource.data.listingCategory == resource.data.listingCategory;
+    }
+
+    function canWriteListingCategory(data) {
+      return isAdminRole()
+        || isManagerRole()
+        || (isProducerRole() && data.listingCategory in ['OUTPUTS_PRODUCER', 'AUCTION_P2P'])
+        || (isSupplierRole() && data.listingCategory == 'INPUTS_INDUSTRY');
     }
 
     match /users/{userId} {
@@ -81,7 +177,20 @@ service cloud.firestore {
 
     match /marketplaceListings/{docId} {
       allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow create: if signedIn()
+        && listingCategoryValid(request.resource.data)
+        && listingModeValidForCategory(request.resource.data)
+        && listingStatusValid(request.resource.data)
+        && canWriteListingCategory(request.resource.data);
+      allow update: if signedIn()
+        && listingCategoryValid(request.resource.data)
+        && listingModeValidForCategory(request.resource.data)
+        && listingStatusValid(request.resource.data)
+        && listingCategoryImmutable()
+        && listingStatusTransitionAllowed()
+        && canWriteListingCategory(resource.data)
+        && (isAdminRole() || isManagerRole() || request.auth.uid == resource.data.createdByUserId);
+      allow delete: if false;
     }
 
     match /corporateCards/{docId} {
@@ -179,6 +288,26 @@ service cloud.firestore {
       allow write: if hasAnyRole();
     }
 
+    match /publicMarketPrices/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /publicMarketPrices/{docId}/points/{pointId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /publicMarketIndices/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /publicMarketConfig/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /operatorRequests/{docId} {
       allow read: if signedIn();
       allow write: if hasAnyRole();
@@ -255,18 +384,15 @@ service cloud.firestore {
     }
 
     match /seedFields/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read, write: if false;
     }
 
     match /seedLots/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read, write: if false;
     }
 
     match /seedCertifications/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read, write: if false;
     }
 
     match /investorKpis/{docId} {
@@ -409,8 +535,100 @@ service cloud.firestore {
       allow write: if signedIn();
     }
 
+    match /tenants/{tenantId}/seedFields/{docId} {
+      allow read, create, update: if false;
+      allow delete: if false;
+    }
+
+    match /tenants/{tenantId}/seedLots/{docId} {
+      allow read, create, update: if false;
+      allow delete: if false;
+    }
+
+    match /tenants/{tenantId}/seedCertifications/{docId} {
+      allow read, create, update: if false;
+      allow delete: if false;
+    }
+
+    match /tenants/{tenantId}/marketListings/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow create: if hasTenantAccess(tenantId)
+        && request.resource.data.tenantId == tenantId
+        && listingCategoryValid(request.resource.data)
+        && listingModeValidForCategory(request.resource.data)
+        && listingStatusValid(request.resource.data)
+        && canWriteListingCategory(request.resource.data);
+      allow update: if hasTenantAccess(tenantId)
+        && request.resource.data.tenantId == resource.data.tenantId
+        && listingCategoryValid(request.resource.data)
+        && listingModeValidForCategory(request.resource.data)
+        && listingStatusValid(request.resource.data)
+        && listingCategoryImmutable()
+        && listingStatusTransitionAllowed()
+        && canWriteListingCategory(resource.data)
+        && (isAdminRole() || isManagerRole() || request.auth.uid == resource.data.createdByUserId);
+      allow delete: if false;
+    }
+
+    match /tenants/{tenantId}/marketOrders/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/marketContracts/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/settlements/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/evidences/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/disputes/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/moduleEvents/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/auditLogs/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow create: if hasTenantAccess(tenantId) && currentRole() in ['Gestor', 'Administrador', 'Gestor de Trafego'];
+      allow update, delete: if false;
+    }
+
+    match /tenants/{tenantId}/supportTickets/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/messages/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/approvalRequests/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId}/approvalsAuditEvents/{docId} {
+      allow read: if hasTenantAccess(tenantId);
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+

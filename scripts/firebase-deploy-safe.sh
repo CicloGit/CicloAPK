@@ -106,14 +106,20 @@ npm install
 echo "Passo 6/8: compilando functions..."
 npm run build
 
-echo "Passo 7/8: publicando Hosting + Functions API + Rules/Indexes..."
+echo "Passo 7/8: publicando Hosting + APIs + kernel + Rules/Indexes..."
 cd "$APP_DIR"
-npx firebase-tools deploy --only "hosting,functions:api,firestore:rules,firestore:indexes,storage" --project "$PROJECT_ID"
+npx firebase-tools deploy --only "hosting,functions:api,functions:agroApi,functions:marketApi,functions:supportApi,functions:secureConfirmInboundEntry,functions:secureRegisterStockLoss,functions:adminSetUserClaims,functions:adminUpsertPublicMarketPoint,functions:recomputePublicInputCostIndexDaily,firestore:rules,firestore:indexes,storage" --project "$PROJECT_ID"
 
 echo "Passo 8/8: executando smoke test de producao..."
 WEB_URL="https://${PROJECT_ID}.web.app"
 API_HEALTH_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/api/health"
+AGRO_HEALTH_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/agroApi/health"
+MARKET_HEALTH_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/api/v1/market/health"
+PUBLIC_SUMMARY_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/api/v1/public/market/summary"
 curl -fsS "$WEB_URL" >/dev/null
 curl -fsS "$API_HEALTH_URL" | grep -q '"status":"ok"'
+curl -fsS "$AGRO_HEALTH_URL" | grep -q '"status":"ok"'
+curl -fsS "$MARKET_HEALTH_URL" | grep -q '"status":"ok"'
+curl -fsS "$PUBLIC_SUMMARY_URL" | grep -q '"countsByCategory"'
 
 echo "Deploy concluido com sucesso para: $PROJECT_ID (commit $LOCAL_SHA)"

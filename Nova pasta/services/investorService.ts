@@ -1,12 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
+﻿import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export interface InvestorKpi {
@@ -24,24 +16,8 @@ export interface InvestorProject {
   status: 'Ativo' | 'Concluido';
   expectedReturn: string;
 }
-
-let seeded = false;
-
 const kpiCollection = collection(db, 'investorKpis');
 const projectsCollection = collection(db, 'investorProjects');
-
-const seedKpis: InvestorKpi[] = [
-  { id: 'INV-KPI-1', label: 'Total Investido', value: 'R$ 850K', color: 'text-indigo-600', icon: 'library' },
-  { id: 'INV-KPI-2', label: 'Retorno Acumulado', value: 'R$ 125K', color: 'text-green-600', icon: 'cash' },
-  { id: 'INV-KPI-3', label: 'ROI Medio', value: '14.7%', color: 'text-emerald-600', icon: 'trend' },
-  { id: 'INV-KPI-4', label: 'Oportunidades', value: '6', color: 'text-sky-600', icon: 'briefcase' },
-];
-
-const seedProjects: InvestorProject[] = [
-  { id: 'INV-PRJ-1', name: 'Safra Soja 2024', invested: 'R$ 200.000', status: 'Ativo', expectedReturn: '18%' },
-  { id: 'INV-PRJ-2', name: 'Pecuaria Intensiva', invested: 'R$ 350.000', status: 'Ativo', expectedReturn: '12%' },
-  { id: 'INV-PRJ-3', name: 'Credito Insumos', invested: 'R$ 300.000', status: 'Concluido', expectedReturn: '15.2% (real)' },
-];
 
 const toKpi = (id: string, raw: Record<string, unknown>): InvestorKpi => ({
   id,
@@ -58,28 +34,19 @@ const toProject = (id: string, raw: Record<string, unknown>): InvestorProject =>
   status: (raw.status as InvestorProject['status']) ?? 'Ativo',
   expectedReturn: String(raw.expectedReturn ?? ''),
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 export const investorService = {
   async listKpis(): Promise<InvestorKpi[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(kpiCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toKpi(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listProjects(): Promise<InvestorProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 };
+
+
+

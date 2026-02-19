@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { MarketTrend } from '../types';
 
@@ -26,27 +26,6 @@ export interface CapacityReport {
 const marketTrendsCollection = collection(db, 'marketTrends');
 const consumptionCollection = collection(db, 'reportConsumptions');
 const capacityCollection = collection(db, 'reportCapacity');
-
-let seeded = false;
-
-const seedConsumptionRows: ConsumptionReportRow[] = [
-  { id: 'CONS-001', product: 'Racao Crescimento', total: '1.200 kg', avgPerAnimal: '10 kg', dailyAvg: '0.5 kg', costPerHead: 'R$ 22,00' },
-  { id: 'CONS-002', product: 'Sal Mineral 80', total: '240 kg', avgPerAnimal: '2 kg', dailyAvg: '0.1 kg', costPerHead: 'R$ 8,50' },
-  { id: 'CONS-003', product: 'Vacina Aftosa', total: '120 doses', avgPerAnimal: '1 dose', dailyAvg: '-', costPerHead: 'R$ 4,20' },
-];
-
-const seedCapacity: CapacityReport = {
-  cycleStart: '15/01/2024',
-  projectedEnd: '15/11/2024',
-  daysElapsed: 145,
-  totalDays: 300,
-  efficiency: 92,
-  animalsIn: 120,
-  mortality: 1,
-  projectedWeight: '450 kg',
-  currentWeight: '320 kg',
-};
-
 const toMarketTrend = (id: string, raw: Record<string, unknown>): MarketTrend => ({
   commodity: String(raw.commodity ?? id),
   price: Number(raw.price ?? 0),
@@ -75,20 +54,8 @@ const toCapacityReport = (raw: Record<string, unknown>): CapacityReport => ({
   projectedWeight: String(raw.projectedWeight ?? ''),
   currentWeight: String(raw.currentWeight ?? ''),
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const reportsService = {
   async listMarketTrends(): Promise<MarketTrend[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(marketTrendsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toMarketTrend(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -96,7 +63,6 @@ export const reportsService = {
   },
 
   async listConsumptionRows(): Promise<ConsumptionReportRow[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(consumptionCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toConsumptionRow(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -104,7 +70,6 @@ export const reportsService = {
   },
 
   async getCapacityReport(): Promise<CapacityReport | null> {
-    await ensureSeedData();
     const snapshot = await getDoc(doc(db, 'reportCapacity', 'current'));
     if (!snapshot.exists()) {
       return null;
@@ -112,3 +77,5 @@ export const reportsService = {
     return toCapacityReport(snapshot.data() as Record<string, unknown>);
   },
 };
+
+

@@ -56,7 +56,7 @@ const EventsMatrixView: React.FC = () => {
     return (
         <div>
             <h2 className="text-3xl font-bold text-slate-800 mb-2">Matriz Central de Eventos</h2>
-            <p className="text-slate-600 mb-8">A "fonte unica da verdade" que conecta eventos do sistema a regras, locks, evidencias e estados.</p>
+            <p className="text-slate-600 mb-8">Fonte unica da verdade para eventos criticos do Marketplace e da Venda Mercado Consumidor.</p>
 
             <div className="space-y-12">
                 {modules.map((moduleData) => (

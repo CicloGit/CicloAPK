@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   collection,
   getDocs,
@@ -48,21 +48,8 @@ const EMPTY_FORMULA: CustomInputFormula = {
   composition: [],
   regulatoryNote: '',
 };
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 export const customInputService = {
   async listPastures(): Promise<CustomInputPasture[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(pastureCollection);
     return snapshot.docs.map((docSnapshot: any) => ({
       id: docSnapshot.id,
@@ -71,7 +58,6 @@ export const customInputService = {
   },
 
   async getFormula(): Promise<CustomInputFormula> {
-    await ensureSeedData();
     const snapshot = await getDocs(query(formulasCollection, limit(1)));
     if (snapshot.empty) {
       return EMPTY_FORMULA;
@@ -91,7 +77,6 @@ export const customInputService = {
   },
 
   async submitRequest(payload: Omit<CustomInputRequest, 'id'>): Promise<void> {
-    await ensureSeedData();
     await addDoc(requestsCollection, {
       ...payload,
       status: payload.status ?? 'REQUESTED',
@@ -99,3 +84,4 @@ export const customInputService = {
     });
   },
 };
+

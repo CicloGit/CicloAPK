@@ -12,6 +12,7 @@ const targetDirs = [
   path.join(appDir, 'services'),
   path.join(appDir, 'components'),
   path.join(appDir, 'config'),
+  path.join(appDir, 'contexts'),
 ];
 
 const fileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -71,11 +72,20 @@ function walk(currentDir) {
 
     const content = fs.readFileSync(fullPath, 'utf8');
     const lines = content.split(/\r?\n/);
+    const relPath = path.relative(repoRoot, fullPath);
+
+    if (entry.name === 'constants.ts') {
+      findings.push({
+        file: relPath,
+        line: 1,
+        reason: 'Arquivo legado de mocks detectado (constants.ts)',
+      });
+    }
 
     lines.forEach((line, index) => {
       if (/from ['"]\.\.\/constants['"]/.test(line) || /from ['"]\.\.\/\.\.\/constants['"]/.test(line)) {
         findings.push({
-          file: path.relative(repoRoot, fullPath),
+          file: relPath,
           line: index + 1,
           reason: 'Importa mock de constants',
         });
@@ -83,9 +93,37 @@ function walk(currentDir) {
 
       if (/return\s+seed[A-Za-z0-9_]+/.test(line) || /\?\?\s*seed[A-Za-z0-9_]+/.test(line)) {
         findings.push({
-          file: path.relative(repoRoot, fullPath),
+          file: relPath,
           line: index + 1,
           reason: 'Retorna fallback seed local',
+        });
+      }
+
+      if (/\blet\s+seeded\s*=\s*false\b/.test(line) || /\basync function ensureSeedData\s*\(/.test(line) || /\bawait ensureSeedData\s*\(/.test(line)) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Mecanismo de seed local detectado',
+        });
+      }
+
+      if (
+        /\bconst\s+seed[A-Z][A-Za-z0-9_]*\s*:\s*[^=]+\s*=\s*\[/.test(line) ||
+        /\bconst\s+seed[A-Z][A-Za-z0-9_]*\s*=\s*\[/.test(line) ||
+        /\bconst\s+seed[A-Z][A-Za-z0-9_]*\s*:\s*[^=]+\s*=\s*\{/.test(line)
+      ) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Dataset seed local detectado',
+        });
+      }
+
+      if (/\bmock[A-Z][A-Za-z0-9_]+\b/.test(line)) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Referencia a mock local detectada',
         });
       }
     });
@@ -106,7 +144,7 @@ for (const dir of targetDirs) {
 }
 
 if (findings.length === 0) {
-  console.log('[real-mode] OK: nenhum import de mock constants encontrado nos modulos auditados.');
+  console.log('[real-mode] OK: nenhum mock/seed local detectado nos modulos auditados.');
   process.exit(0);
 }
 

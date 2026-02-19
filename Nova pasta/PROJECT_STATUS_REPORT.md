@@ -1,4 +1,4 @@
-# Relatorio de modulos e prontidao
+﻿# Relatorio de modulos e prontidao
 
 ## Proposito do projeto
 
@@ -158,8 +158,7 @@ O Ciclo+ ERP Web e uma plataforma para gestao agro com multiplos perfis (Produto
 
 ### Faltas tecnicas principais
 
-1. Migrar modulos que ainda usam mocks para servicos Firebase:
-   - Modulos informativos e placeholders: nenhum restante.
+1. Migracao para modo real concluida no codigo ativo (services/components/config/contexts auditados).
 2. Padronizar camada de dados:
    - Criar servicos por dominio (ex.: `financialService`, `commercialService`, `logisticsService`).
 3. Endurecer regras de seguranca Firestore/Storage para cenario de producao:
@@ -193,7 +192,7 @@ O Ciclo+ ERP Web e uma plataforma para gestao agro com multiplos perfis (Produto
 
 ## Checklist de producao (meta alvo)
 
-- [ ] Todos os modulos sem mock
+- [x] Todos os modulos sem mock no runtime auditado
 - [ ] Regras Firestore/Storage revisadas e testadas
 - [ ] Upload de evidencias e trilha de auditoria completa
 - [ ] Testes e CI com build + typecheck + smoke tests
@@ -206,3 +205,4 @@ O Ciclo+ ERP Web e uma plataforma para gestao agro com multiplos perfis (Produto
 1. Validar autenticacao + propriedade + estoque em emulador local.
 2. Definir o proximo modulo para migracao (recomendo `AIAnalysisView`).
 3. Eu implemento o servico Firebase desse modulo, removo mocks da tela e entrego com build validado.
+

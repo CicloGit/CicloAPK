@@ -1,4 +1,4 @@
-
+﻿
 import { ProductionSector, ViewType } from '../types';
 import FlaskIcon from '../components/icons/FlaskIcon';
 
@@ -40,15 +40,15 @@ export const getSectorSettings = (sector: ProductionSector | undefined): SectorC
     if (!sector) {
         // Default / Fallback (Consolidated View / Holding)
         return {
-            labels: { liveHandling: 'Manejo Rápido', management: 'Atividades', unit: 'Item', group: 'Lote' },
-            managementTabs: ['Geral', 'Manutenção', 'Outros'],
-            liveHandling: { title: 'Execução Operacional', primaryInput: 'Valor', primaryUnit: '-', actions: ['Registrar'] },
+            labels: { liveHandling: 'Manejo RÃ¡pido', management: 'Atividades', unit: 'Item', group: 'Lote' },
+            managementTabs: ['Geral', 'ManutenÃ§Ã£o', 'Outros'],
+            liveHandling: { title: 'ExecuÃ§Ã£o Operacional', primaryInput: 'Valor', primaryUnit: '-', actions: ['Registrar'] },
             navigation: [
-                { view: 'dashboard', label: 'Visão Consolidada' },
+                { view: 'dashboard', label: 'VisÃ£o Consolidada' },
                 { view: 'financials', label: 'Financeiro Holding' },
-                { view: 'reports', label: 'Relatórios Gerenciais' },
+                { view: 'reports', label: 'RelatÃ³rios Gerenciais' },
                 { view: 'sales', label: 'Comercial & Vendas' },
-                { view: 'contracts', label: 'Gestão de Contratos' },
+                { view: 'contracts', label: 'GestÃ£o de Contratos' },
                 { view: 'workforce', label: 'Equipe & RH' },
                 { view: 'propertyRegistration', label: 'Propriedades' },
                 { view: 'carbonMarket', label: 'Mercado de Carbono' },
@@ -61,47 +61,47 @@ export const getSectorSettings = (sector: ProductionSector | undefined): SectorC
         case 'Agricultura':
         case 'Silvicultura':
             return {
-                labels: { liveHandling: 'Monitoramento de Campo', management: 'Tratos Culturais', unit: 'Talhão', group: 'Safra' },
-                managementTabs: ['Plantio', 'Pulverização', 'Colheita', 'Adubação'],
+                labels: { liveHandling: 'Monitoramento de Campo', management: 'Tratos Culturais', unit: 'TalhÃ£o', group: 'Safra' },
+                managementTabs: ['Plantio', 'PulverizaÃ§Ã£o', 'Colheita', 'AdubaÃ§Ã£o'],
                 liveHandling: { 
                     title: 'Monitoramento de Safra', 
-                    primaryInput: 'Umidade/Estágio', 
+                    primaryInput: 'Umidade/EstÃ¡gio', 
                     primaryUnit: '%', 
-                    actions: ['Registrar Praga', 'Medir Umidade', 'Finalizar Talhão'] 
+                    actions: ['Registrar Praga', 'Medir Umidade', 'Finalizar TalhÃ£o'] 
                 },
                 navigation: [
                     { view: 'dashboard', label: 'Painel da Safra' },
                     { view: 'liveHandling', label: 'Monitoramento de Campo' }, // Adapted Label
                     { view: 'management', label: 'Tratos Culturais' }, // Adapted Label
-                    { view: 'fieldOperations', label: 'Operações de Máquinas' },
+                    { view: 'fieldOperations', label: 'OperaÃ§Ãµes de MÃ¡quinas' },
                     { view: 'carbonMarket', label: 'Mercado de Carbono' },
                     { view: 'reports', label: 'Produtividade & Insumos' },
                     { view: 'stock', label: 'Estoque de Insumos' },
                     { view: 'futureMarket', label: 'Mercado Futuro (Commodities)' },
                     { view: 'sales', label: 'Venda de Safra' },
                     { view: 'financials', label: 'Custos da Safra' },
-                    { view: 'propertyRegistration', label: 'Mapa de Talhões' },
+                    { view: 'propertyRegistration', label: 'Mapa de TalhÃµes' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'futureMarket', 'liveHandling']
             };
         case 'Hortifruti':
         case 'Fruticultura':
             return {
-                labels: { liveHandling: 'Classificação & Packing', management: 'Manejo de Horta/Pomar', unit: 'Canteiro/Estufa', group: 'Lote' },
-                managementTabs: ['Irrigação', 'Nutrição', 'Colheita', 'Poda'],
+                labels: { liveHandling: 'ClassificaÃ§Ã£o & Packing', management: 'Manejo de Horta/Pomar', unit: 'Canteiro/Estufa', group: 'Lote' },
+                managementTabs: ['IrrigaÃ§Ã£o', 'NutriÃ§Ã£o', 'Colheita', 'Poda'],
                 liveHandling: { 
-                    title: 'Colheita e Classificação', 
+                    title: 'Colheita e ClassificaÃ§Ã£o', 
                     primaryInput: 'Peso Colhido', 
                     primaryUnit: 'kg', 
                     actions: ['Registrar Caixa', 'Descarte', 'Controle Qualidade'] 
                 },
                 navigation: [
-                    { view: 'dashboard', label: 'Painel da Produção' },
+                    { view: 'dashboard', label: 'Painel da ProduÃ§Ã£o' },
                     { view: 'liveHandling', label: 'Colheita & Packing' },
-                    { view: 'management', label: 'Manejo Diário' },
+                    { view: 'management', label: 'Manejo DiÃ¡rio' },
                     { view: 'fieldOperations', label: 'Tarefas de Campo' },
                     { view: 'stock', label: 'Embalagens & Insumos' },
-                    { view: 'sales', label: 'Vendas (Ceasa/Varejo)' },
+                    { view: 'sales', label: 'Venda Mercado Consumidor (Atacadista Direto / Mercados)' },
                     { view: 'financials', label: 'Fluxo de Caixa' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'liveHandling']
@@ -113,8 +113,8 @@ export const getSectorSettings = (sector: ProductionSector | undefined): SectorC
         case 'Suinocultura':
         case 'Equinocultura':
             return {
-                labels: { liveHandling: 'Curral Inteligente', management: 'Manejo Sanitário/Nutricional', unit: 'Animal', group: 'Lote/Pasto' },
-                managementTabs: ['Nutrição', 'Sanidade', 'Reprodução', 'Movimentação'],
+                labels: { liveHandling: 'Curral Inteligente', management: 'Manejo SanitÃ¡rio/Nutricional', unit: 'Animal', group: 'Lote/Pasto' },
+                managementTabs: ['NutriÃ§Ã£o', 'Sanidade', 'ReproduÃ§Ã£o', 'MovimentaÃ§Ã£o'],
                 liveHandling: { 
                     title: 'Manejo no Curral', 
                     primaryInput: 'Peso', 
@@ -124,80 +124,80 @@ export const getSectorSettings = (sector: ProductionSector | undefined): SectorC
                 navigation: [
                     { view: 'dashboard', label: 'Painel do Rebanho' },
                     { view: 'liveHandling', label: 'Manejo no Curral' },
-                    { view: 'management', label: 'Sanidade & Nutrição' },
+                    { view: 'management', label: 'Sanidade & NutriÃ§Ã£o' },
                     { view: 'customInputRequest', label: 'Insumo Personalizado' },
-                    { view: 'fieldOperations', label: 'Operações de Campo' },
+                    { view: 'fieldOperations', label: 'OperaÃ§Ãµes de Campo' },
                     { view: 'carbonMarket', label: 'Mercado de Carbono' },
                     { view: 'reports', label: 'GMD & Desempenho' },
-                    { view: 'stock', label: 'Farmácia & Ração' },
+                    { view: 'stock', label: 'FarmÃ¡cia & RaÃ§Ã£o' },
                     { view: 'futureMarket', label: 'Mercado Futuro (@)' },
                     { view: 'sales', label: 'Venda de Animais' },
-                    { view: 'financials', label: 'Custos por Cabeça' },
+                    { view: 'financials', label: 'Custos por CabeÃ§a' },
                     { view: 'propertyRegistration', label: 'Mapa de Pastos' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'liveHandling', 'futureMarket']
             };
         case 'Piscicultura':
             return {
-                labels: { liveHandling: 'Biometria e Água', management: 'Manejo de Tanques', unit: 'Tanque', group: 'Lote' },
-                managementTabs: ['Qualidade Água', 'Arraçoamento', 'Despesca', 'Sanidade'],
+                labels: { liveHandling: 'Biometria e Ãgua', management: 'Manejo de Tanques', unit: 'Tanque', group: 'Lote' },
+                managementTabs: ['Qualidade Ãgua', 'ArraÃ§oamento', 'Despesca', 'Sanidade'],
                 liveHandling: { 
-                    title: 'Análise de Tanque', 
-                    primaryInput: 'Oxigênio/pH', 
+                    title: 'AnÃ¡lise de Tanque', 
+                    primaryInput: 'OxigÃªnio/pH', 
                     primaryUnit: 'mg/L', 
-                    actions: ['Medir O2', 'Medir pH', 'Biometria (Peso Médio)', 'Arraçoar'] 
+                    actions: ['Medir O2', 'Medir pH', 'Biometria (Peso MÃ©dio)', 'ArraÃ§oar'] 
                 },
                 navigation: [
                     { view: 'dashboard', label: 'Painel dos Tanques' },
-                    { view: 'liveHandling', label: 'Qualidade da Água' },
-                    { view: 'management', label: 'Alimentação & Biometria' },
-                    { view: 'reports', label: 'Conversão Alimentar' },
-                    { view: 'stock', label: 'Ração & Químicos' },
-                    { view: 'sales', label: 'Venda (Frigorífico)' },
+                    { view: 'liveHandling', label: 'Qualidade da Ãgua' },
+                    { view: 'management', label: 'AlimentaÃ§Ã£o & Biometria' },
+                    { view: 'reports', label: 'ConversÃ£o Alimentar' },
+                    { view: 'stock', label: 'RaÃ§Ã£o & QuÃ­micos' },
+                    { view: 'sales', label: 'Venda (FrigorÃ­fico)' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'liveHandling']
             };
         case 'Avicultura':
             return {
-                labels: { liveHandling: 'Coleta e Pesagem', management: 'Manejo Aviário', unit: 'Galpão', group: 'Lote' },
-                managementTabs: ['Ambiência', 'Mortalidade', 'Coleta Ovos', 'Nutrição'],
+                labels: { liveHandling: 'Coleta e Pesagem', management: 'Manejo AviÃ¡rio', unit: 'GalpÃ£o', group: 'Lote' },
+                managementTabs: ['AmbiÃªncia', 'Mortalidade', 'Coleta Ovos', 'NutriÃ§Ã£o'],
                 liveHandling: { 
-                    title: 'Diário do Aviário', 
+                    title: 'DiÃ¡rio do AviÃ¡rio', 
                     primaryInput: 'Mortalidade', 
                     primaryUnit: 'aves', 
                     actions: ['Coleta Ovos', 'Reg. Mortalidade', 'Temp/Umidade'] 
                 },
                 navigation: [
-                    { view: 'dashboard', label: 'Painel dos Galpões' },
-                    { view: 'liveHandling', label: 'Diário de Mortalidade' },
-                    { view: 'management', label: 'Controle de Ambiência' },
+                    { view: 'dashboard', label: 'Painel dos GalpÃµes' },
+                    { view: 'liveHandling', label: 'DiÃ¡rio de Mortalidade' },
+                    { view: 'management', label: 'Controle de AmbiÃªncia' },
                     { view: 'reports', label: 'Performance do Lote' },
-                    { view: 'stock', label: 'Ração & Vacinas' },
+                    { view: 'stock', label: 'RaÃ§Ã£o & Vacinas' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'liveHandling']
             };
         case 'Apicultura':
             return {
-                labels: { liveHandling: 'Revisão de Colmeia', management: 'Manejo Apiário', unit: 'Colmeia', group: 'Apiário' },
-                managementTabs: ['Alimentação', 'Sanidade', 'Colheita Mel', 'Rainhas'],
+                labels: { liveHandling: 'RevisÃ£o de Colmeia', management: 'Manejo ApiÃ¡rio', unit: 'Colmeia', group: 'ApiÃ¡rio' },
+                managementTabs: ['AlimentaÃ§Ã£o', 'Sanidade', 'Colheita Mel', 'Rainhas'],
                 liveHandling: { 
-                    title: 'Inspeção de Campo', 
+                    title: 'InspeÃ§Ã£o de Campo', 
                     primaryInput: 'Quadros Mel', 
                     primaryUnit: 'un', 
                     actions: ['Troca Cera', 'Alimentar', 'Colher'] 
                 },
                 navigation: [
-                    { view: 'dashboard', label: 'Painel do Apiário' },
-                    { view: 'liveHandling', label: 'Revisão de Colmeias' },
-                    { view: 'management', label: 'Produção de Mel' },
+                    { view: 'dashboard', label: 'Painel do ApiÃ¡rio' },
+                    { view: 'liveHandling', label: 'RevisÃ£o de Colmeias' },
+                    { view: 'management', label: 'ProduÃ§Ã£o de Mel' },
                     { view: 'stock', label: 'Material & Cera' },
                 ],
                 supportedViews: [...GLOBAL_VIEWS, 'management', 'liveHandling']
             };
         default:
             return {
-                labels: { liveHandling: 'Operação', management: 'Tarefas', unit: 'Unidade', group: 'Grupo' },
-                managementTabs: ['Geral', 'Manutenção'],
+                labels: { liveHandling: 'OperaÃ§Ã£o', management: 'Tarefas', unit: 'Unidade', group: 'Grupo' },
+                managementTabs: ['Geral', 'ManutenÃ§Ã£o'],
                 liveHandling: { title: 'Registro', primaryInput: 'Valor', primaryUnit: '-', actions: ['Registrar'] },
                 navigation: [
                     { view: 'dashboard', label: 'Painel Geral' },
@@ -208,3 +208,4 @@ export const getSectorSettings = (sector: ProductionSector | undefined): SectorC
             };
     }
 };
+

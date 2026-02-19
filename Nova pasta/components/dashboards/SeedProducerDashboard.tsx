@@ -83,8 +83,8 @@ const SeedProducerDashboard: React.FC = () => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">Painel do Produtor de Sementes</h2>
-            <p className="text-slate-600 mb-8">Gerencie seus campos, lotes e processos de certificacao com precisao.</p>
+            <h2 className="text-3xl font-bold text-slate-800 mb-2">Modulo de Sementes do Produtor</h2>
+            <p className="text-slate-600 mb-8">Capability de sementes ativa no perfil Produtor (scope seedProducer).</p>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

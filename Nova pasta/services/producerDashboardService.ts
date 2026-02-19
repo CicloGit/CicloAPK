@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   AnimalProductionDetails,
@@ -14,9 +14,6 @@ const sectorDetailsCollection = collection(db, 'sectorDetails');
 const stageDetailsCollection = collection(db, 'stageDetails');
 const projectStagesCollection = collection(db, 'projectStages');
 const auditEventsCollection = collection(db, 'auditEvents');
-
-let seeded = false;
-
 const toFinancialDetails = (id: string, raw: Record<string, unknown>): FinancialDetails => ({
   projectId: String(raw.projectId ?? id),
   totalCost: Number(raw.totalCost ?? 0),
@@ -63,20 +60,8 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
   verified: Boolean(raw.verified),
   proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {
-    await ensureSeedData();
     const snapshot = await getDocs(financialDetailsCollection);
     const acc: Record<string, FinancialDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -87,7 +72,6 @@ export const producerDashboardService = {
   },
 
   async listAnimalDetails(): Promise<Record<string, AnimalProductionDetails>> {
-    await ensureSeedData();
     const snapshot = await getDocs(animalDetailsCollection);
     const acc: Record<string, AnimalProductionDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -98,7 +82,6 @@ export const producerDashboardService = {
   },
 
   async listSectorDetails(): Promise<Record<string, SectorSpecificData>> {
-    await ensureSeedData();
     const snapshot = await getDocs(sectorDetailsCollection);
     const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -109,7 +92,6 @@ export const producerDashboardService = {
   },
 
   async listStageDetails(): Promise<Record<string, SectorSpecificData>> {
-    await ensureSeedData();
     const snapshot = await getDocs(stageDetailsCollection);
     const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -120,7 +102,6 @@ export const producerDashboardService = {
   },
 
   async listProjectStages(): Promise<Record<string, ProjectStage[]>> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectStagesCollection);
     const acc: Record<string, ProjectStage[]> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
@@ -130,13 +111,11 @@ export const producerDashboardService = {
   },
 
   async listAuditEvents(): Promise<AuditEvent[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(auditEventsCollection);
     return snapshot.docs.map((docSnapshot: any) => toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async getStageDetails(stageId: string): Promise<SectorSpecificData | null> {
-    await ensureSeedData();
     const snapshot = await getDoc(doc(db, 'stageDetails', stageId));
     if (!snapshot.exists()) {
       return null;
@@ -144,3 +123,4 @@ export const producerDashboardService = {
     return toSectorDetails(snapshot.id, snapshot.data() as Record<string, unknown>);
   },
 };
+

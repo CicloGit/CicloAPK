@@ -11,6 +11,7 @@ import XIcon from '../../icons/XIcon';
 import { stockService } from '../../../services/stockService';
 import { storageService } from '../../../services/storageService';
 import { useToast } from '../../../contexts/ToastContext';
+import { useApp } from '../../../contexts/AppContext';
 import { Validators } from '../../../lib/validators';
 import LoadingButton from '../../shared/LoadingButton';
 import InlineError from '../../shared/InlineError';
@@ -18,6 +19,7 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 
 const StockView: React.FC = () => {
     const { addToast } = useToast();
+    const { currentUser } = useApp();
     const [activeTab, setActiveTab] = useState<'INVENTORY' | 'INBOUND' | 'OUTBOUND'>('INVENTORY');
     const [searchTerm, setSearchTerm] = useState('');
     const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -114,9 +116,16 @@ const StockView: React.FC = () => {
             return;
         }
 
+        const tenantId = currentUser?.tenantId;
+        if (!tenantId) {
+            setFormError('Tenant do usuario nao identificado.');
+            setIsSubmitting(false);
+            return;
+        }
+
         let proofUrl = '';
         try {
-            proofUrl = await storageService.uploadStockLossProof(lossPhoto, lossItem || 'stock-loss');
+            proofUrl = await storageService.uploadStockLossProof(lossPhoto, tenantId, lossItem || 'stock-loss');
         } catch {
             setFormError('Falha ao enviar evidência para o Storage.');
             setIsSubmitting(false);
@@ -466,3 +475,4 @@ const StockView: React.FC = () => {
 };
 
 export default StockView;
+

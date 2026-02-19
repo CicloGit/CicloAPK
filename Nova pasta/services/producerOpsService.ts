@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   doc,
   getDocs,
@@ -23,9 +23,6 @@ const lotsCollection = collection(db, 'producerAnimalLots');
 const inputsCollection = collection(db, 'producerInputs');
 const expensesCollection = collection(db, 'producerOperationalExpenses');
 const activitiesCollection = collection(db, 'producerOperationalActivities');
-
-let seeded = false;
-
 const toLot = (id: string, raw: Record<string, unknown>): ProducerAnimalLot => ({
   id,
   name: String(raw.name ?? ''),
@@ -138,16 +135,6 @@ const toActivity = (id: string, raw: Record<string, unknown>): ProducerOperation
   date: String(raw.date ?? ''),
   relatedLotId: raw.relatedLotId ? String(raw.relatedLotId) : undefined,
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 const parseQuantity = (raw?: string): number => {
   if (!raw) return 0;
   const normalized = raw.replace(',', '.');
@@ -157,7 +144,6 @@ const parseQuantity = (raw?: string): number => {
 
 export const producerOpsService = {
   async listAnimalLots(): Promise<ProducerAnimalLot[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(lotsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toLot(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -165,7 +151,6 @@ export const producerOpsService = {
   },
 
   async createAnimalLot(payload: Omit<ProducerAnimalLot, 'id' | 'createdAt'>): Promise<ProducerAnimalLot> {
-    await ensureSeedData();
     const newLot: ProducerAnimalLot = {
       id: `LOT-${Date.now()}`,
       name: payload.name,
@@ -183,7 +168,6 @@ export const producerOpsService = {
   },
 
   async listInputs(): Promise<ProducerInput[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(inputsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toInput(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -191,7 +175,6 @@ export const producerOpsService = {
   },
 
   async createInput(payload: Omit<ProducerInput, 'id' | 'createdAt'>): Promise<ProducerInput> {
-    await ensureSeedData();
     if (!isInputClassificationValid(payload)) {
       throw new Error('Classificacao de insumo invalida para o tipo informado.');
     }
@@ -215,7 +198,6 @@ export const producerOpsService = {
   },
 
   async listExpenses(): Promise<ProducerExpense[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(expensesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toExpense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -223,7 +205,6 @@ export const producerOpsService = {
   },
 
   async createExpense(payload: Omit<ProducerExpense, 'id' | 'date'>): Promise<ProducerExpense> {
-    await ensureSeedData();
     const newExpense: ProducerExpense = {
       id: `EXP-${Date.now()}`,
       description: payload.description,
@@ -242,7 +223,6 @@ export const producerOpsService = {
   },
 
   async listActivities(): Promise<ProducerOperationalActivity[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(activitiesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toActivity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -250,7 +230,6 @@ export const producerOpsService = {
   },
 
   async createActivity(payload: Omit<ProducerOperationalActivity, 'id' | 'date'>): Promise<ProducerOperationalActivity> {
-    await ensureSeedData();
     const newActivity: ProducerOperationalActivity = {
       id: `ACT-${Date.now()}`,
       title: payload.title,
@@ -275,7 +254,6 @@ export const producerOpsService = {
     actor: string;
     role: ProducerOperationalActivity['actorRole'];
   }): Promise<void> {
-    await ensureSeedData();
     const [inputs] = await Promise.all([this.listInputs()]);
     const input = inputs.find((entry) => entry.name.toLowerCase() === params.item.toLowerCase());
     const quantity = parseQuantity(params.quantity);
@@ -314,3 +292,4 @@ export const producerOpsService = {
     return { totalAnimals, totalExpenses, costPerHead };
   },
 };
+

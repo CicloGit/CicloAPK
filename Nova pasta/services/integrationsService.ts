@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   collection,
   doc,
@@ -59,9 +59,6 @@ const defaultStatus: IntegrationStatus = {
     sources: ['CONAB (Safra)', 'CEPEA (Precos)', 'INMET (Clima)'],
   },
 };
-
-let seeded = false;
-
 const toIntegrationStatus = (raw: Record<string, unknown> | undefined): IntegrationStatus => {
   if (!raw) {
     return defaultStatus;
@@ -96,25 +93,13 @@ const toIntegrationStatus = (raw: Record<string, unknown> | undefined): Integrat
     },
   };
 };
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 export const integrationsService = {
   async getStatus(): Promise<IntegrationStatus> {
-    await ensureSeedData();
     const snapshot = await getDoc(statusDocRef);
     return toIntegrationStatus(snapshot.data() as Record<string, unknown> | undefined);
   },
 
   async updateStatus(partial: Partial<IntegrationStatus>): Promise<void> {
-    await ensureSeedData();
     await setDoc(
       statusDocRef,
       {
@@ -133,3 +118,4 @@ export const integrationsService = {
     });
   },
 };
+

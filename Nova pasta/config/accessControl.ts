@@ -1,28 +1,86 @@
-
 import { User, ViewType } from '../types';
 
+const ADMIN_VISUALIZATION_VIEWS: ViewType[] = [
+  'dashboard',
+  'architecture',
+  'dataDictionary',
+  'operations',
+  'flows',
+  'eventsMatrix',
+  'systemConfig',
+  'producerPortal',
+  'technicianPortal',
+  'investorPortal',
+  'supplierPortal',
+  'integratorPortal',
+  'operatorPortal',
+  'finance',
+  'stock',
+  'commercial',
+  'logistics',
+  'legal',
+  'propertyRegistration',
+  'operationalAction',
+  'contracts',
+  'sales',
+  'financials',
+  'accountControl',
+  'management',
+  'futureMarket',
+  'workforce',
+  'publicMarket',
+  'aiAnalysis',
+  'liveHandling',
+  'integrations',
+  'fieldOperations',
+  'reports',
+  'carbonMarket',
+  'customInputRequest',
+  'mobileApp',
+];
+
 export const roleAccessConfig: Record<User['role'], ViewType[]> = {
-    'Produtor': [
-        'dashboard', 'producerPortal', 'stock', 'commercial', 'logistics', 
-        'propertyRegistration', 'contracts', 'sales', 'financials', 'accountControl', 
-        'management', 'futureMarket', 'workforce', 'liveHandling', 'integrations', 
-        'fieldOperations', 'reports', 'carbonMarket', 'customInputRequest'
-    ],
-    'Produtor de Sementes': [
-        'dashboard', 'stock', 'reports', 'integrations', 'financials'
-    ],
-    'Técnico': ['dashboard', 'technicianPortal', 'producerPortal', 'liveHandling', 'operatorPortal'],
-    'Investidor': ['dashboard', 'investorPortal', 'finance'],
-    'Fornecedor': ['dashboard', 'supplierPortal', 'stock', 'logistics', 'integrations'],
-    'Operador': ['operatorPortal', 'liveHandling'],
-    'Gestor': [
-        'dashboard', 'producerPortal', 'technicianPortal', 'investorPortal', 'supplierPortal',
-        'finance', 'stock', 'commercial', 'logistics', 'legal',
-        'propertyRegistration', 'contracts', 'sales', 'financials', 'accountControl', 
-        'management', 'futureMarket', 'workforce', 'operatorPortal', 'integrations', 
-        'reports', 'carbonMarket'
-    ],
-    'Integradora': [
-        'dashboard', 'integratorPortal', 'contracts', 'financials', 'logistics', 'integrations'
-    ]
+  Produtor: [
+    'dashboard',
+    'producerPortal',
+    'stock',
+    'commercial',
+    'logistics',
+    'propertyRegistration',
+    'contracts',
+    'sales',
+    'financials',
+    'accountControl',
+    'management',
+    'futureMarket',
+    'workforce',
+    'liveHandling',
+    'integrations',
+    'fieldOperations',
+    'reports',
+    'carbonMarket',
+    'customInputRequest',
+  ],
+  'T\u00E9cnico': ['dashboard', 'technicianPortal', 'producerPortal', 'liveHandling', 'operatorPortal'],
+  Investidor: ['dashboard', 'investorPortal', 'finance'],
+  Fornecedor: ['dashboard', 'supplierPortal', 'stock', 'logistics', 'integrations'],
+  Operador: ['operatorPortal', 'liveHandling'],
+  Gestor: [...ADMIN_VISUALIZATION_VIEWS],
+  Integradora: ['dashboard', 'integratorPortal', 'contracts', 'financials', 'logistics', 'integrations', 'commercial'],
+  'Gestor de Trafego': [
+    'dashboard',
+    'supplierPortal',
+    'logistics',
+    'financials',
+    'operations',
+    'eventsMatrix',
+    'integrations',
+    'legal',
+  ],
+  Administrador: [...ADMIN_VISUALIZATION_VIEWS],
+};
+
+export const canAccessView = (user: User, view: ViewType): boolean => {
+  const roleViews = roleAccessConfig[user.role] ?? [];
+  return roleViews.includes(view);
 };

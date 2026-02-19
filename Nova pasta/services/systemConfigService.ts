@@ -1,4 +1,4 @@
-import { collection, getDocs } from 'firebase/firestore';
+﻿import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export type SystemConfigKey = 'events' | 'stateMachines' | 'permissions' | 'firestore' | 'openapi' | 'enums';
@@ -9,21 +9,8 @@ export interface SystemConfigEntry {
 }
 
 const configCollection = collection(db, 'systemConfigs');
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 export const systemConfigService = {
   async listConfigs(): Promise<SystemConfigEntry[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(configCollection);
     return snapshot.docs.map((docSnapshot: any) => ({
       id: docSnapshot.id as SystemConfigKey,
@@ -31,3 +18,4 @@ export const systemConfigService = {
     }));
   },
 };
+

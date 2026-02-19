@@ -1,0 +1,12 @@
+{
+  "name": "ciclo-scripts-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "set-claims-batch": "node set-claims-batch.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
+

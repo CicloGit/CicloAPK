@@ -1,21 +1,9 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { toEventsMatrixModules } from '../config/operationsCatalog';
 import { EventMatrixModule } from '../types';
 
 const eventsMatrixCollection = collection(db, 'eventsMatrix');
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixModule => ({
   title: String(raw.title ?? id),
   description: raw.description ? String(raw.description) : undefined,
@@ -34,10 +22,22 @@ const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixMod
 
 export const eventsMatrixService = {
   async listModules(): Promise<EventMatrixModule[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(eventsMatrixCollection);
-    return snapshot.docs.map((docSnapshot: any) =>
+    const remoteModules = snapshot.docs.map((docSnapshot: any) =>
       toEventModule(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
+
+    const catalogModules = toEventsMatrixModules();
+    if (remoteModules.length === 0) {
+      return catalogModules;
+    }
+
+    const merged = new Map<string, EventMatrixModule>();
+    [...remoteModules, ...catalogModules].forEach((moduleItem) => {
+      merged.set(moduleItem.title, moduleItem);
+    });
+
+    return Array.from(merged.values());
   },
 };
+

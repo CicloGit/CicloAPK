@@ -1,13 +1,10 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CarbonCredit, CarbonProject, SustainablePractice } from '../types';
 
 const practicesCollection = collection(db, 'sustainablePractices');
 const projectsCollection = collection(db, 'carbonProjects');
 const creditsCollection = collection(db, 'carbonCredits');
-
-let seeded = false;
-
 const toPractice = (id: string, raw: Record<string, unknown>): SustainablePractice => ({
   id,
   name: String(raw.name ?? ''),
@@ -33,20 +30,8 @@ const toCredit = (id: string, raw: Record<string, unknown>): CarbonCredit => ({
   status: (raw.status as CarbonCredit['status']) ?? 'DISPONIVEL',
   certificateHash: String(raw.certificateHash ?? ''),
 });
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const carbonService = {
   async listPractices(): Promise<SustainablePractice[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(practicesCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toPractice(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -54,7 +39,6 @@ export const carbonService = {
   },
 
   async listProjects(): Promise<CarbonProject[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(projectsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -62,7 +46,6 @@ export const carbonService = {
   },
 
   async listCredits(): Promise<CarbonCredit[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(creditsCollection);
     return snapshot.docs
       .map((docSnapshot: any) => toCredit(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
@@ -70,10 +53,10 @@ export const carbonService = {
   },
 
   async updateProjectStatus(projectId: string, status: CarbonProject['status']): Promise<void> {
-    await ensureSeedData();
     await updateDoc(doc(db, 'carbonProjects', projectId), {
       status,
       updatedAt: serverTimestamp(),
     });
   },
 };
+

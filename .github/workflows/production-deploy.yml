@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: npm
           cache-dependency-path: Nova pasta/package-lock.json
 
@@ -101,14 +101,14 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy hosting, API, and Firebase rules/indexes
+      - name: Deploy hosting, APIs, kernel functions, and Firebase rules/indexes
         working-directory: ${{ env.APP_DIR }}
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           firebase deploy \
             --project "${FIREBASE_PROJECT_ID}" \
-            --only "hosting,functions:api,firestore:rules,firestore:indexes,storage" \
+            --only "hosting,functions:api,functions:agroApi,functions:marketApi,functions:supportApi,functions:secureConfirmInboundEntry,functions:secureRegisterStockLoss,functions:adminSetUserClaims,functions:adminUpsertPublicMarketPoint,functions:recomputePublicInputCostIndexDaily,firestore:rules,firestore:indexes,storage" \
             --token "${FIREBASE_TOKEN}"
 
       - name: Smoke test production endpoints
@@ -116,3 +116,9 @@ jobs:
           curl -fsS "https://ciclo-plus-f9c8f.web.app" >/dev/null
           API_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/health")"
           echo "$API_HEALTH" | grep -q '"status":"ok"'
+          AGRO_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/agroApi/health")"
+          echo "$AGRO_HEALTH" | grep -q '"status":"ok"'
+          MARKET_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/v1/market/health")"
+          echo "$MARKET_HEALTH" | grep -q '"status":"ok"'
+          PUBLIC_SUMMARY="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/v1/public/market/summary")"
+          echo "$PUBLIC_SUMMARY" | grep -q '"countsByCategory"'

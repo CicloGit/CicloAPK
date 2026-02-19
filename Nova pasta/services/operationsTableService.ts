@@ -1,21 +1,9 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { toOperationsTableRows } from '../config/operationsCatalog';
 import { Operation } from '../types';
 
 const operationsCollection = collection(db, 'operationsTable');
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 const toOperation = (id: string, raw: Record<string, unknown>): Operation => ({
   operation: String(raw.operation ?? ''),
   profile: String(raw.profile ?? ''),
@@ -27,10 +15,19 @@ const toOperation = (id: string, raw: Record<string, unknown>): Operation => ({
 
 export const operationsTableService = {
   async listOperations(): Promise<Operation[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(operationsCollection);
-    return snapshot.docs.map((docSnapshot: any) =>
+    const remoteRows = snapshot.docs.map((docSnapshot: any) =>
       toOperation(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
+
+    const catalogRows = toOperationsTableRows();
+    const merged = new Map<string, Operation>();
+
+    [...remoteRows, ...catalogRows].forEach((row) => {
+      merged.set(row.operation, row);
+    });
+
+    return Array.from(merged.values());
   },
 };
+

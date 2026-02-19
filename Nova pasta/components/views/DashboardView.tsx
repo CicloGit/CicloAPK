@@ -8,7 +8,6 @@ import TechnicianDashboard from '../dashboards/TechnicianDashboard';
 import InvestorDashboard from '../dashboards/InvestorDashboard';
 import SupplierDashboard from '../dashboards/SupplierDashboard';
 import IntegratorDashboard from '../dashboards/IntegratorDashboard';
-import SeedProducerDashboard from '../dashboards/SeedProducerDashboard';
 
 const DashboardView: React.FC = () => {
   const { currentUser, selectedProductionId, setSelectedProductionId, setCurrentAction } = useApp();
@@ -17,22 +16,22 @@ const DashboardView: React.FC = () => {
   if (!currentUser) {
     return null; // Should be redirected by ProtectedRoute
   }
-  
+
   const handleActionNavigation = (action: OperationalActionType) => {
-      setCurrentAction(action);
-      navigate('/operational-action');
+    setCurrentAction(action);
+    navigate('/operational-action');
   };
 
   const renderDashboardByRole = () => {
     switch (currentUser.role) {
       case 'Produtor':
-        return <ProducerDashboard 
-                  selectedProductionId={selectedProductionId} 
-                  setSelectedProductionId={setSelectedProductionId} 
-                  setCurrentAction={handleActionNavigation}
-                />;
-      case 'Produtor de Sementes':
-        return <SeedProducerDashboard />;
+        return (
+          <ProducerDashboard
+            selectedProductionId={selectedProductionId}
+            setSelectedProductionId={setSelectedProductionId}
+            setCurrentAction={handleActionNavigation}
+          />
+        );
       case 'Gestor':
         return <ManagerDashboard />;
       case 'Técnico':
@@ -45,11 +44,13 @@ const DashboardView: React.FC = () => {
         return <IntegratorDashboard />;
       default:
         // Fallback for any other defined role
-        return <ProducerDashboard 
-                  selectedProductionId={selectedProductionId} 
-                  setSelectedProductionId={setSelectedProductionId} 
-                  setCurrentAction={handleActionNavigation}
-                />;
+        return (
+          <ProducerDashboard
+            selectedProductionId={selectedProductionId}
+            setSelectedProductionId={setSelectedProductionId}
+            setCurrentAction={handleActionNavigation}
+          />
+        );
     }
   };
 

@@ -9,7 +9,7 @@ import LoadingSpinner from './components/shared/LoadingSpinner';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import ToastContainer from './components/shared/ToastContainer';
 import { ViewType } from './types';
-import { roleAccessConfig } from './config/accessControl';
+import { canAccessView } from './config/accessControl';
 
 // Lazy load views
 const ArchitectureView = lazy(() => import('./components/views/ArchitectureView'));
@@ -52,7 +52,47 @@ const UnauthorizedView = lazy(() => import('./components/views/UnauthorizedView'
 
 // Maps URL paths to ViewType for authorization checks
 const PATH_TO_VIEW_MAP: Record<string, ViewType> = {
-    '/dashboard': 'dashboard', '/architecture': 'architecture', '/data-dictionary': 'dataDictionary', '/operations': 'operations', '/flows': 'flows', '/events-matrix': 'eventsMatrix', '/system-config': 'systemConfig', '/property-registration': 'propertyRegistration', '/operational-action': 'operationalAction', '/contracts': 'contracts', '/sales': 'sales', '/financials': 'financials', '/account-control': 'accountControl', '/management': 'management', '/future-market': 'futureMarket', '/workforce': 'workforce', '/stock': 'stock', '/commercial': 'commercial', '/logistics': 'logistics', '/ai-analysis': 'aiAnalysis', '/live-handling': 'liveHandling', '/integrations': 'integrations', '/field-operations': 'fieldOperations', '/reports': 'reports', '/carbon-market': 'carbonMarket', '/custom-input-request': 'customInputRequest', '/operator-portal': 'operatorPortal', '/mobile-app': 'mobileApp', '/technician-portal': 'technicianPortal', '/investor-portal': 'investorPortal', '/supplier-portal': 'supplierPortal', '/integrator-portal': 'integratorPortal', '/finance': 'finance', '/legal': 'legal'
+    '/dashboard': 'dashboard',
+    '/architecture': 'architecture',
+    '/data-dictionary': 'dataDictionary',
+    '/operations': 'operations',
+    '/flows': 'flows',
+    '/events-matrix': 'eventsMatrix',
+    '/system-config': 'systemConfig',
+    '/property-registration': 'propertyRegistration',
+    '/operational-action': 'operationalAction',
+    '/contracts': 'contracts',
+    '/sales': 'sales',
+    '/financials': 'financials',
+    '/account-control': 'accountControl',
+    '/management': 'management',
+    '/future-market': 'futureMarket',
+    '/workforce': 'workforce',
+    '/stock': 'stock',
+    '/commercial': 'commercial',
+    '/logistics': 'logistics',
+    '/ai-analysis': 'aiAnalysis',
+    '/live-handling': 'liveHandling',
+    '/integrations': 'integrations',
+    '/field-operations': 'fieldOperations',
+    '/reports': 'reports',
+    '/carbon-market': 'carbonMarket',
+    '/custom-input-request': 'customInputRequest',
+    '/operator-portal': 'operatorPortal',
+    '/mobile-app': 'mobileApp',
+    '/technician-portal': 'technicianPortal',
+    '/investor-portal': 'investorPortal',
+    '/supplier-portal': 'supplierPortal',
+    '/integrator-portal': 'integratorPortal',
+    '/finance': 'finance',
+    '/legal': 'legal',
+};
+
+const resolveTargetView = (pathname: string): ViewType | null => {
+    const normalizedPath = pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname;
+    const sortedEntries = Object.entries(PATH_TO_VIEW_MAP).sort((a, b) => b[0].length - a[0].length);
+    const matchedRoute = sortedEntries.find(([routePath]) => normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`));
+    return matchedRoute ? matchedRoute[1] : null;
 };
 
 // --- AUTH GUARDS ---
@@ -65,11 +105,9 @@ const AuthenticationGuard = () => {
 const AuthorizationGuard = () => {
     const { currentUser } = useApp();
     const location = useLocation();
-    const basePath = '/' + location.pathname.split('/')[1];
-    const targetView = (basePath === '/' || basePath === '') ? 'dashboard' : PATH_TO_VIEW_MAP[basePath];
+    const targetView = location.pathname === '/' ? 'dashboard' : resolveTargetView(location.pathname);
     if (currentUser && targetView) {
-        const allowedViews = roleAccessConfig[currentUser.role];
-        if (!allowedViews || !allowedViews.includes(targetView)) {
+        if (!canAccessView(currentUser, targetView)) {
             return <Navigate to="/unauthorized" replace />;
         }
     }

@@ -1,20 +1,8 @@
-import { collection, getDocs } from 'firebase/firestore';
+﻿import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ArchitectureNode } from '../types';
 
 const architectureCollection = collection(db, 'architectureNodes');
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
 const toArchitectureNode = (id: string, raw: Record<string, unknown>): ArchitectureNode => ({
   id,
   label: String(raw.label ?? ''),
@@ -31,10 +19,10 @@ const toArchitectureNode = (id: string, raw: Record<string, unknown>): Architect
 
 export const architectureService = {
   async listNodes(): Promise<ArchitectureNode[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(architectureCollection);
     return snapshot.docs.map((docSnapshot: any) =>
       toArchitectureNode(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
 };
+

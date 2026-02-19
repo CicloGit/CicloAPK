@@ -1,21 +1,9 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { toDataDictionaryEntities } from '../config/operationsCatalog';
 import { DataEntity } from '../types';
 
 const dataDictionaryCollection = collection(db, 'dataDictionaryEntities');
-
-let seeded = false;
-
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 const toDataEntity = (id: string, raw: Record<string, unknown>): DataEntity => ({
   name: String(raw.name ?? id),
   description: String(raw.description ?? ''),
@@ -24,10 +12,22 @@ const toDataEntity = (id: string, raw: Record<string, unknown>): DataEntity => (
 
 export const dataDictionaryService = {
   async listEntities(): Promise<DataEntity[]> {
-    await ensureSeedData();
     const snapshot = await getDocs(dataDictionaryCollection);
-    return snapshot.docs.map((docSnapshot: any) =>
+    const remoteEntities = snapshot.docs.map((docSnapshot: any) =>
       toDataEntity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
+    const catalogEntities = toDataDictionaryEntities();
+
+    if (remoteEntities.length === 0) {
+      return catalogEntities;
+    }
+
+    const merged = new Map<string, DataEntity>();
+    [...remoteEntities, ...catalogEntities].forEach((entity) => {
+      merged.set(entity.name, entity);
+    });
+
+    return Array.from(merged.values());
   },
 };
+

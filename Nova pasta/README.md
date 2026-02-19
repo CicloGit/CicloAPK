@@ -1,4 +1,4 @@
-# Ciclo+ ERP Web
+﻿# Ciclo+ ERP Web
 
 Sistema web ERP para operacao agro com foco em cadastro de propriedade, estoque auditavel, modulos produtivos e dashboards por perfil.
 
@@ -106,7 +106,7 @@ npm run build
 
 ## Observacoes de estado atual
 
-- Estoque, Cadastro de Propriedade, Financeiro (modulo consolidado), Juridico (modulo consolidado), Vendas, Workforce, Relatorios, Carbono, Mercado Publico, IA, Acao Operacional, Insumos Personalizados, Configuracoes do Sistema, Dicionario de Dados, Tabela de Operacoes, Matriz de Eventos, Fluxos de Liquidacao, Arquitetura do Sistema, Mobile App (tarefas), Portal do Operador, Integracoes, Fornecedor, Integradora, Painel do Produtor, Painel do Tecnico, Produtor de Sementes, Investidor, Gestao, Manejo, Mercado Futuro, Diario de Campo, Manejo Ao Vivo, Catalogo Comercial, Logistica e Contratos ja estao conectados ao Firestore.
+- Estoque, Cadastro de Propriedade, Financeiro (modulo consolidado), Juridico (modulo consolidado), Vendas, Workforce, Relatorios, Carbono, Mercado Publico, IA, Acao Operacional, Insumos Personalizados, Configuracoes do Sistema, Dicionario de Dados, Tabela de Operacoes, Matriz de Eventos, Fluxos de liquidacao, Arquitetura do Sistema, Mobile App (tarefas), Portal do Operador, Integracoes, Fornecedor, Integradora, Painel do Produtor, capability de Sementes dentro de Produtor (scope), Painel do Tecnico, Investidor, Gestao, Manejo, Mercado Futuro, Diario de Campo, Manejo Ao Vivo, Catalogo Comercial, Logistica e Contratos ja estao conectados ao Firestore.
 - Diversos modulos ainda usam mocks de `constants.ts` e precisam migrar para servicos Firebase.
 - O projeto compila com `npm run build`.
 - `services/contractsService.ts`: persistencia de contratos
@@ -117,3 +117,4 @@ npm run build
 - Producao exige variaveis `VITE_FIREBASE_*` preenchidas com projeto real.
 - Producao usa backend `https://us-central1-<project-id>.cloudfunctions.net/api` (ou `VITE_BACKEND_BASE_URL` explicita).
 - Deploy de producao foi configurado para publicar: Hosting + Functions API + Firestore Rules/Indexes + Storage Rules.
+

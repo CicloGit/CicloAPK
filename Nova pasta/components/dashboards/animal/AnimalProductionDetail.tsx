@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState } from 'react';
 import { AnimalProductionDetails, Pasture, Animal, AnimalStatus } from '../../../types';
 import DNAIcon from '../../icons/DNAIcon';
@@ -11,7 +11,7 @@ const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
 const AnimalStatusBadge: React.FC<{ status: AnimalStatus | null }> = ({ status }) => {
     if (!status) return null;
 
-    const statusStyles: Record<AnimalStatus, string> = {
+    const statusStyles: Record<string, string> = {
         'Protocolada': 'bg-blue-100 text-blue-800',
         'Inseminada': 'bg-purple-100 text-purple-800',
         'Prenhez Confirmada': 'bg-yellow-100 text-yellow-800',
@@ -68,7 +68,7 @@ const AnimalProductionDetail: React.FC<AnimalProductionDetailProps> = ({ details
         <DNAIcon className="h-6 w-6" />
         <h3 className="text-xl font-bold ml-3">Manejo de Pastos e Rebanho</h3>
       </div>
-      <p className="text-slate-600 mb-6 text-sm">Visualize a localização de cada animal e gerencie o ciclo reprodutivo das matrizes.</p>
+      <p className="text-slate-600 mb-6 text-sm">Visualize a localizaÃ§Ã£o de cada animal e gerencie o ciclo reprodutivo das matrizes.</p>
 
       <div className="space-y-2">
         {details.pastures.map(pasture => (
@@ -89,7 +89,7 @@ const AnimalProductionDetail: React.FC<AnimalProductionDetailProps> = ({ details
                                 <th className="p-2">ID Animal</th>
                                 <th className="p-2">Categoria</th>
                                 <th className="p-2">Status Reprodutivo</th>
-                                <th className="p-2 text-right">Ações</th>
+                                <th className="p-2 text-right">AÃ§Ãµes</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -124,3 +124,4 @@ const AnimalProductionDetail: React.FC<AnimalProductionDetailProps> = ({ details
 };
 
 export default AnimalProductionDetail;
+

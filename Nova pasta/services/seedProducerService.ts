@@ -1,12 +1,40 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../config/firebase';
 import { CertificationStep, SeedField, SeedLot } from '../types';
+import { authClaimsService } from './authClaimsService';
 
-const seedFieldsCollection = collection(db, 'seedFields');
-const seedLotsCollection = collection(db, 'seedLots');
-const certificationCollection = collection(db, 'seedCertifications');
+type SeedsCollection = 'seedFields' | 'seedLots' | 'seedCertifications';
 
-let seeded = false;
+const tenantSeedsCollection = (tenantId: string, collectionName: SeedsCollection) =>
+  collection(db, 'tenants', tenantId, collectionName);
+
+const resolveSeedContext = async (): Promise<{ tenantId: string }> => {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    throw new Error('Usuario nao autenticado.');
+  }
+
+  const claims = await authClaimsService.resolveClaims(firebaseUser, {
+    forceRefresh: false,
+    allowProfileFallback: true,
+  });
+
+  if (claims.role !== 'PRODUCER') {
+    throw new Error('Acesso negado ao modulo de sementes.');
+  }
+
+  if (claims.producerScopes.seedProducer !== true) {
+    throw new Error('Scope producerScopes.seedProducer obrigatorio para o modulo de sementes.');
+  }
+
+  if (!claims.tenantId) {
+    throw new Error('tenantId ausente nas claims/perfil.');
+  }
+
+  return {
+    tenantId: claims.tenantId,
+  };
+};
 
 const toSeedField = (id: string, raw: Record<string, unknown>): SeedField => ({
   id,
@@ -30,40 +58,30 @@ const toSeedLot = (id: string, raw: Record<string, unknown>): SeedLot => ({
 });
 
 const toCertificationStep = (id: string, raw: Record<string, unknown>): CertificationStep => ({
-  name: String(raw.name ?? ''),
+  name: String(raw.name ?? id),
   status: (raw.status as CertificationStep['status']) ?? 'PENDENTE',
   date: raw.date ? String(raw.date) : undefined,
 });
 
-async function ensureSeedData() {
-  if (seeded) {
-    return;
-  }
-
-  seeded = true;
-}
-
-
-
 export const seedProducerService = {
   async listSeedFields(): Promise<SeedField[]> {
-    await ensureSeedData();
-    const snapshot = await getDocs(seedFieldsCollection);
-    return snapshot.docs
-      .map((docSnapshot: any) => toSeedField(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    const { tenantId } = await resolveSeedContext();
+    const snapshot = await getDocs(tenantSeedsCollection(tenantId, 'seedFields'));
+    return snapshot.docs.map((docSnapshot: any) => toSeedField(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listSeedLots(): Promise<SeedLot[]> {
-    await ensureSeedData();
-    const snapshot = await getDocs(seedLotsCollection);
-    return snapshot.docs
-      .map((docSnapshot: any) => toSeedLot(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    const { tenantId } = await resolveSeedContext();
+    const snapshot = await getDocs(tenantSeedsCollection(tenantId, 'seedLots'));
+    return snapshot.docs.map((docSnapshot: any) => toSeedLot(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listCertificationSteps(): Promise<CertificationStep[]> {
-    await ensureSeedData();
-    const snapshot = await getDocs(certificationCollection);
-    return snapshot.docs
-      .map((docSnapshot: any) => toCertificationStep(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    const { tenantId } = await resolveSeedContext();
+    const snapshot = await getDocs(tenantSeedsCollection(tenantId, 'seedCertifications'));
+    return snapshot.docs.map((docSnapshot: any) =>
+      toCertificationStep(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
+    );
   },
 };
+
