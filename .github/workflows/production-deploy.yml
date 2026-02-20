@@ -94,7 +94,7 @@ jobs:
 
       - name: Validate deploy credentials
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN || vars.FIREBASE_TOKEN }}
         run: |
           if [ -z "${FIREBASE_TOKEN}" ]; then
             echo "Missing required repository secret: FIREBASE_TOKEN"
@@ -104,7 +104,7 @@ jobs:
       - name: Deploy hosting, APIs, kernel functions, and Firebase rules/indexes
         working-directory: ${{ env.APP_DIR }}
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN || vars.FIREBASE_TOKEN }}
         run: |
           firebase deploy \
             --project "${FIREBASE_PROJECT_ID}" \
