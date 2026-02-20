@@ -7,7 +7,6 @@ import { ToastProvider } from './contexts/ToastContext';
 import LoadingFallback from './components/LoadingFallback';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import ToastContainer from './components/shared/ToastContainer';
-import OfflineBanner from './components/shared/OfflineBanner';
 import { ViewType } from './types';
 import { canAccessView } from './config/accessControl';
 
@@ -42,7 +41,6 @@ const CustomInputRequestView = lazy(() => import('./components/views/producer/Cu
 const MobileAppView = lazy(() => import('./components/views/mobile/MobileAppView'));
 const FinanceView = lazy(() => import('./components/views/FinanceView'));
 const LegalView = lazy(() => import('./components/views/LegalView'));
-const MarketplacePage = lazy(() => import('./pages/Marketplace'));
 const IntegratorDashboard = lazy(() => import('./components/dashboards/IntegratorDashboard'));
 const SupplierDashboard = lazy(() => import('./components/dashboards/SupplierDashboard'));
 const TechnicianDashboard = lazy(() => import('./components/dashboards/TechnicianDashboard'));
@@ -84,7 +82,6 @@ const PATH_TO_VIEW_MAP: Record<string, ViewType> = {
   '/integrator-portal': 'integratorPortal',
   '/finance': 'finance',
   '/legal': 'legal',
-  '/marketplace': 'marketplace',
 };
 
 const resolveTargetView = (pathname: string): ViewType | null => {
@@ -118,7 +115,6 @@ const MainLayout = () => (
   <div className="flex h-screen bg-slate-100 font-sans">
     <Sidebar />
     <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-      <OfflineBanner />
       <ErrorBoundary>
         <Suspense fallback={<LoadingFallback />}>
           <Outlet />
@@ -130,7 +126,6 @@ const MainLayout = () => (
 
 const FullscreenLayout = ({ children }: { children: React.ReactNode }) => (
   <main className="h-screen overflow-y-auto">
-    <OfflineBanner />
     <ErrorBoundary>
       <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
     </ErrorBoundary>
@@ -192,7 +187,6 @@ const AppContent: React.FC = () => {
               <Route element={<SupplierDashboard />} path="supplier-portal" />
               <Route element={<FinanceView />} path="finance" />
               <Route element={<LegalView />} path="legal" />
-              <Route element={<MarketplacePage />} path="marketplace" />
               <Route element={<IntegratorDashboard />} path="integrator-portal" />
             </Route>
             <Route element={<FullscreenLayout><MobileAppView /></FullscreenLayout>} path="mobile-app" />
