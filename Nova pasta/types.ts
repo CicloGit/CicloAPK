@@ -358,6 +358,19 @@ export type ConsumerMarketChannel = 'WHOLESALE_DIRECT' | 'RETAIL_MARKETS';
 export type ListingCategory = 'OUTPUTS_PRODUCER' | 'INPUTS_INDUSTRY' | 'AUCTION_P2P';
 export type ListingMode = 'FIXED_PRICE' | 'AUCTION';
 export type ListingPriceModel = 'FIXED' | 'TIERED' | 'QUOTE_REQUIRED' | 'AUCTION';
+export type ProducerSaleSourceType = 'ANIMAL_UNIT_LOT' | 'ANIMAL_WEIGHT' | 'CROP' | 'ASSET';
+export type ProducerSaleSettlementMode = 'DIRECT_SALE' | 'AUCTION_REMESSA';
+export type ProducerFiscalStatus =
+    | 'NF_EMITIDA'
+    | 'AGUARDANDO_FINALIZACAO_LEILAO'
+    | 'AGUARDANDO_EMISSAO';
+export type ProducerSaleEvidenceType =
+    | 'QR_CODE'
+    | 'SCALE_QR'
+    | 'PHOTO'
+    | 'VIDEO'
+    | 'SALE_AUTHORIZATION'
+    | 'VEHICLE';
 
 export interface SalesOffer {
     id: string;
@@ -374,6 +387,46 @@ export interface SalesOffer {
     minimumBid?: number;
     status: SalesOfferStatus;
     date: string;
+}
+
+export interface ProducerSaleEvidence {
+    id: string;
+    type: ProducerSaleEvidenceType;
+    createdAt: string;
+    reference?: string;
+    url?: string;
+    hash?: string;
+    notes?: string;
+}
+
+export interface ProducerPdvSale {
+    id: string;
+    createdAt: string;
+    sourceType: ProducerSaleSourceType;
+    settlementMode: ProducerSaleSettlementMode;
+    fiscalStatus: ProducerFiscalStatus;
+    buyer: string;
+    description: string;
+    unitPrice: number;
+    totalValue: number;
+    actor: string;
+    lotId?: string;
+    animalIds?: string[];
+    headcount?: number;
+    totalWeightKg?: number;
+    fieldPlot?: string;
+    boxes?: number;
+    assetItemId?: string;
+    assetName?: string;
+    saleAuthorizationCode?: string;
+    vehiclePlate?: string;
+    scaleQrCode?: string;
+    deferFiscalEmission?: boolean;
+    auctionFinishedAt?: string;
+    fiscalDocumentNumber?: string;
+    fiscalIssuedAt?: string;
+    evidences: ProducerSaleEvidence[];
+    auditHash?: string;
 }
 
 export type ReceivableStatus = 'PENDENTE' | 'EM_ESCROW' | 'LIQUIDADO' | 'ATRASADO';
@@ -756,6 +809,24 @@ export interface ProducerAnimalLot {
     category: string;
     headcount: number;
     averageWeightKg: number;
+    pastureId?: string;
+    animalIds?: string[];
+    trackingMode?: 'UNIT' | 'WEIGHT';
+    totalWeightKg?: number;
+    distributionArea?: string;
+    createdAt: string;
+}
+
+export interface ProducerAnimal {
+    id: string;
+    earringCode: string;
+    species: 'BOVINO' | 'SUINO' | 'OVINO' | 'CAPRINO' | 'EQUINO' | 'OUTRO';
+    category: string;
+    trackingMode: 'UNIT' | 'WEIGHT';
+    currentWeightKg?: number;
+    pastureId?: string;
+    lotId?: string;
+    status: 'ACTIVE' | 'IN_LOT' | 'AUCTION' | 'SOLD';
     createdAt: string;
 }
 
@@ -871,4 +942,3 @@ export interface SeedLot {
   purity: number; // percentage
   storageLocation: string;
 }
-

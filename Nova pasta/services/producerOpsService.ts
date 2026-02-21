@@ -10,6 +10,7 @@
 import { db } from '../config/firebase';
 import {
   ProducerApplicationArea,
+  ProducerAnimal,
   ProducerAnimalLot,
   ProducerExpense,
   ProducerInput,
@@ -20,6 +21,7 @@ import {
 import { parseDateToTimestamp } from './dateUtils';
 
 const lotsCollection = collection(db, 'producerAnimalLots');
+const animalsCollection = collection(db, 'producerAnimals');
 const inputsCollection = collection(db, 'producerInputs');
 const expensesCollection = collection(db, 'producerOperationalExpenses');
 const activitiesCollection = collection(db, 'producerOperationalActivities');
@@ -29,6 +31,36 @@ const toLot = (id: string, raw: Record<string, unknown>): ProducerAnimalLot => (
   category: String(raw.category ?? ''),
   headcount: Number(raw.headcount ?? 0),
   averageWeightKg: Number(raw.averageWeightKg ?? 0),
+  pastureId: raw.pastureId ? String(raw.pastureId) : undefined,
+  animalIds: Array.isArray(raw.animalIds) ? (raw.animalIds as string[]).map((item) => String(item)) : undefined,
+  trackingMode: raw.trackingMode === 'WEIGHT' ? 'WEIGHT' : raw.trackingMode === 'UNIT' ? 'UNIT' : undefined,
+  totalWeightKg: raw.totalWeightKg !== undefined && raw.totalWeightKg !== null ? Number(raw.totalWeightKg) : undefined,
+  distributionArea: raw.distributionArea ? String(raw.distributionArea) : undefined,
+  createdAt: String(raw.createdAt ?? ''),
+});
+
+const toAnimal = (id: string, raw: Record<string, unknown>): ProducerAnimal => ({
+  id,
+  earringCode: String(raw.earringCode ?? ''),
+  species: (() => {
+    const normalized = String(raw.species ?? '').toUpperCase();
+    if (normalized === 'BOVINO' || normalized === 'SUINO' || normalized === 'OVINO' || normalized === 'CAPRINO' || normalized === 'EQUINO' || normalized === 'OUTRO') {
+      return normalized as ProducerAnimal['species'];
+    }
+    return 'BOVINO';
+  })(),
+  category: String(raw.category ?? ''),
+  trackingMode: raw.trackingMode === 'WEIGHT' ? 'WEIGHT' : 'UNIT',
+  currentWeightKg: raw.currentWeightKg !== undefined && raw.currentWeightKg !== null ? Number(raw.currentWeightKg) : undefined,
+  pastureId: raw.pastureId ? String(raw.pastureId) : undefined,
+  lotId: raw.lotId ? String(raw.lotId) : undefined,
+  status: (() => {
+    const normalized = String(raw.status ?? '').toUpperCase();
+    if (normalized === 'IN_LOT' || normalized === 'AUCTION' || normalized === 'SOLD') {
+      return normalized as ProducerAnimal['status'];
+    }
+    return 'ACTIVE';
+  })(),
   createdAt: String(raw.createdAt ?? ''),
 });
 
@@ -148,6 +180,49 @@ const parseQuantity = (raw?: string): number => {
 };
 
 export const producerOpsService = {
+  async listAnimals(): Promise<ProducerAnimal[]> {
+    const snapshot = await getDocs(animalsCollection);
+    return snapshot.docs
+      .map((docSnapshot: any) => toAnimal(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .sort((a: ProducerAnimal, b: ProducerAnimal) => a.earringCode.localeCompare(b.earringCode));
+  },
+
+  async createAnimal(
+    payload: Omit<ProducerAnimal, 'id' | 'createdAt' | 'status'> & { status?: ProducerAnimal['status'] }
+  ): Promise<ProducerAnimal> {
+    const normalizedEarring = payload.earringCode.trim().toUpperCase();
+    if (!normalizedEarring) {
+      throw new Error('Brinco do animal obrigatorio.');
+    }
+
+    const currentAnimals = await this.listAnimals();
+    const duplicated = currentAnimals.some((animal) => animal.earringCode.trim().toUpperCase() === normalizedEarring);
+    if (duplicated) {
+      throw new Error('Ja existe animal cadastrado para este brinco.');
+    }
+
+    const newAnimal: ProducerAnimal = {
+      id: `ANM-${Date.now()}`,
+      earringCode: normalizedEarring,
+      species: payload.species,
+      category: payload.category.trim() || 'Nao classificado',
+      trackingMode: payload.trackingMode,
+      currentWeightKg: payload.currentWeightKg,
+      pastureId: payload.pastureId,
+      lotId: payload.lotId,
+      status: payload.status ?? 'ACTIVE',
+      createdAt: new Date().toLocaleString('pt-BR'),
+    };
+
+    await setDoc(doc(db, 'producerAnimals', newAnimal.id), {
+      ...newAnimal,
+      createdAtTs: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newAnimal;
+  },
+
   async listAnimalLots(): Promise<ProducerAnimalLot[]> {
     const snapshot = await getDocs(lotsCollection);
     return snapshot.docs
@@ -162,6 +237,11 @@ export const producerOpsService = {
       category: payload.category,
       headcount: payload.headcount,
       averageWeightKg: payload.averageWeightKg,
+      pastureId: payload.pastureId,
+      animalIds: payload.animalIds,
+      trackingMode: payload.trackingMode,
+      totalWeightKg: payload.totalWeightKg,
+      distributionArea: payload.distributionArea,
       createdAt: new Date().toLocaleString('pt-BR'),
     };
     await setDoc(doc(db, 'producerAnimalLots', newLot.id), {
@@ -170,6 +250,58 @@ export const producerOpsService = {
       updatedAt: serverTimestamp(),
     });
     return newLot;
+  },
+
+  async createAnimalLotFromAnimalIds(payload: {
+    name: string;
+    category: string;
+    animalIds: string[];
+    pastureId?: string;
+    distributionArea?: string;
+  }): Promise<ProducerAnimalLot> {
+    const selectedAnimalIds = payload.animalIds.map((item) => item.trim()).filter((item) => item.length > 0);
+    if (selectedAnimalIds.length === 0) {
+      throw new Error('Informe ao menos um animal para formar o lote.');
+    }
+
+    const animals = await this.listAnimals();
+    const selectedAnimals = animals.filter((animal) => selectedAnimalIds.includes(animal.id));
+    if (selectedAnimals.length !== selectedAnimalIds.length) {
+      throw new Error('Nem todos os animais selecionados foram encontrados.');
+    }
+
+    const totalWeight = selectedAnimals.reduce((sum, animal) => sum + Number(animal.currentWeightKg ?? 0), 0);
+    const averageWeight = selectedAnimals.length > 0 ? totalWeight / selectedAnimals.length : 0;
+    const inferredCategory = payload.category.trim() || selectedAnimals[0]?.category || 'Lote Animal';
+    const inferredArea = payload.distributionArea ?? selectedAnimals[0]?.pastureId;
+
+    const lot = await this.createAnimalLot({
+      name: payload.name.trim(),
+      category: inferredCategory,
+      headcount: selectedAnimals.length,
+      averageWeightKg: Number(averageWeight.toFixed(2)),
+      pastureId: payload.pastureId,
+      animalIds: selectedAnimalIds,
+      trackingMode: 'UNIT',
+      totalWeightKg: Number(totalWeight.toFixed(2)),
+      distributionArea: inferredArea,
+    });
+
+    await Promise.all(
+      selectedAnimals.map((animal) =>
+        setDoc(
+          doc(db, 'producerAnimals', animal.id),
+          {
+            lotId: lot.id,
+            status: 'IN_LOT',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+      )
+    );
+
+    return lot;
   },
 
   async listInputs(): Promise<ProducerInput[]> {
