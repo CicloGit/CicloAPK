@@ -57,6 +57,7 @@ const ReportsView: React.FC = () => {
     const [selectedBatch, setSelectedBatch] = useState('Lote A - Recria');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
 
     const [marketTrends, setMarketTrends] = useState<MarketTrend[]>([]);
     const [consumptionData, setConsumptionData] = useState<ConsumptionReportRow[]>([]);
@@ -108,34 +109,104 @@ const ReportsView: React.FC = () => {
     const [saleWeight, setSaleWeight] = useState<number>(20);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    const toErrorMessage = (reason: unknown): string => (reason instanceof Error ? reason.message : 'erro desconhecido');
 
     const loadAll = async () => {
         setIsLoading(true);
         setLoadError(null);
-        try {
-            const [loadedTrends, loadedConsumption, loadedCapacity, kpis, workspace, loadedLots, loadedInputs, loadedExpenses] = await Promise.all([
-                reportsService.listMarketTrends(),
-                reportsService.listConsumptionRows(),
-                reportsService.getCapacityReport(),
-                producerOpsService.getKpis(),
-                propertyService.loadWorkspace(),
-                producerOpsService.listAnimalLots(),
-                producerOpsService.listInputs(),
-                producerOpsService.listExpenses(),
-            ]);
-            setMarketTrends(loadedTrends);
-            setConsumptionData(loadedConsumption);
-            setCapacityData(loadedCapacity);
-            setRegistryKpis(kpis);
-            setPropertyData(workspace.property);
-            setLots(loadedLots);
-            setInputs(loadedInputs);
-            setExpenses(loadedExpenses);
-        } catch {
-            setLoadError('Nao foi possivel carregar os relatorios.');
-        } finally {
-            setIsLoading(false);
+        setPartialWarnings([]);
+
+        const [loadedTrends, loadedConsumption, loadedCapacity, loadedKpis, loadedWorkspace, loadedLots, loadedInputs, loadedExpenses] = await Promise.allSettled([
+            reportsService.listMarketTrends(),
+            reportsService.listConsumptionRows(),
+            reportsService.getCapacityReport(),
+            producerOpsService.getKpis(),
+            propertyService.loadWorkspace(),
+            producerOpsService.listAnimalLots(),
+            producerOpsService.listInputs(),
+            producerOpsService.listExpenses(),
+        ]);
+
+        const warnings: string[] = [];
+        const hasAnySuccess = [
+            loadedTrends,
+            loadedConsumption,
+            loadedCapacity,
+            loadedKpis,
+            loadedWorkspace,
+            loadedLots,
+            loadedInputs,
+            loadedExpenses,
+        ].some((entry) => entry.status === 'fulfilled');
+
+        if (loadedTrends.status === 'fulfilled') {
+            setMarketTrends(loadedTrends.value);
+        } else {
+            setMarketTrends([]);
+            warnings.push(`Tendencias de mercado: ${toErrorMessage(loadedTrends.reason)}`);
         }
+
+        if (loadedConsumption.status === 'fulfilled') {
+            setConsumptionData(loadedConsumption.value);
+        } else {
+            setConsumptionData([]);
+            warnings.push(`Consumo por lote: ${toErrorMessage(loadedConsumption.reason)}`);
+        }
+
+        if (loadedCapacity.status === 'fulfilled') {
+            setCapacityData(loadedCapacity.value);
+        } else {
+            setCapacityData(null);
+            warnings.push(`Capacidade produtiva: ${toErrorMessage(loadedCapacity.reason)}`);
+        }
+
+        if (loadedKpis.status === 'fulfilled') {
+            setRegistryKpis(loadedKpis.value);
+        } else {
+            setRegistryKpis({ totalAnimals: 0, totalExpenses: 0, costPerHead: 0 });
+            warnings.push(`KPIs de cadastro: ${toErrorMessage(loadedKpis.reason)}`);
+        }
+
+        if (loadedWorkspace.status === 'fulfilled') {
+            setPropertyData(loadedWorkspace.value.property);
+        } else {
+            setPropertyData(null);
+            warnings.push(`Cadastro da propriedade: ${toErrorMessage(loadedWorkspace.reason)}`);
+        }
+
+        if (loadedLots.status === 'fulfilled') {
+            setLots(loadedLots.value);
+        } else {
+            setLots([]);
+            warnings.push(`Lotes de animais: ${toErrorMessage(loadedLots.reason)}`);
+        }
+
+        if (loadedInputs.status === 'fulfilled') {
+            setInputs(loadedInputs.value);
+        } else {
+            setInputs([]);
+            warnings.push(`Insumos: ${toErrorMessage(loadedInputs.reason)}`);
+        }
+
+        if (loadedExpenses.status === 'fulfilled') {
+            setExpenses(loadedExpenses.value);
+        } else {
+            setExpenses([]);
+            warnings.push(`Despesas operacionais: ${toErrorMessage(loadedExpenses.reason)}`);
+        }
+
+        if (!hasAnySuccess) {
+            setLoadError('Nao foi possivel carregar os relatorios.');
+        } else if (warnings.length > 0) {
+            setPartialWarnings(warnings);
+            addToast({
+                type: 'warning',
+                title: 'Relatorios carregados parcialmente',
+                message: 'Algumas fontes falharam; os dados disponiveis foram exibidos.',
+            });
+        }
+
+        setIsLoading(false);
     };
 
     useEffect(() => {
@@ -143,16 +214,45 @@ const ReportsView: React.FC = () => {
     }, []);
 
     const refreshRegistryData = async () => {
-        const [kpis, loadedLots, loadedInputs, loadedExpenses] = await Promise.all([
+        const [kpis, loadedLots, loadedInputs, loadedExpenses] = await Promise.allSettled([
             producerOpsService.getKpis(),
             producerOpsService.listAnimalLots(),
             producerOpsService.listInputs(),
             producerOpsService.listExpenses(),
         ]);
-        setRegistryKpis(kpis);
-        setLots(loadedLots);
-        setInputs(loadedInputs);
-        setExpenses(loadedExpenses);
+        const refreshWarnings: string[] = [];
+
+        if (kpis.status === 'fulfilled') {
+            setRegistryKpis(kpis.value);
+        } else {
+            refreshWarnings.push(`KPIs: ${toErrorMessage(kpis.reason)}`);
+        }
+
+        if (loadedLots.status === 'fulfilled') {
+            setLots(loadedLots.value);
+        } else {
+            refreshWarnings.push(`Lotes: ${toErrorMessage(loadedLots.reason)}`);
+        }
+
+        if (loadedInputs.status === 'fulfilled') {
+            setInputs(loadedInputs.value);
+        } else {
+            refreshWarnings.push(`Insumos: ${toErrorMessage(loadedInputs.reason)}`);
+        }
+
+        if (loadedExpenses.status === 'fulfilled') {
+            setExpenses(loadedExpenses.value);
+        } else {
+            refreshWarnings.push(`Despesas: ${toErrorMessage(loadedExpenses.reason)}`);
+        }
+
+        if (refreshWarnings.length > 0) {
+            addToast({
+                type: 'warning',
+                title: 'Atualizacao parcial',
+                message: 'Parte dos dados de cadastro nao foi atualizada neste momento.',
+            });
+        }
     };
 
     const handleSaveProperty = async () => {
@@ -276,6 +376,14 @@ const ReportsView: React.FC = () => {
         });
     }, [salePrice, saleWeight, totalCostPerHead, replacementCost]);
 
+    const capacityProgressPercent = capacityData && capacityData.totalDays > 0
+        ? Math.min(100, Math.max(0, (capacityData.daysElapsed / capacityData.totalDays) * 100))
+        : 0;
+
+    const capacityMortalityPercent = capacityData && capacityData.animalsIn > 0
+        ? (capacityData.mortality / capacityData.animalsIn) * 100
+        : 0;
+
     const inputsByArea = useMemo(() => {
         return inputs.reduce<Record<ProducerApplicationArea, typeof inputs>>(
             (grouped, input) => {
@@ -304,6 +412,13 @@ const ReportsView: React.FC = () => {
                 Relatorios Gerenciais & Performance
             </h2>
             <p className="text-slate-600 mb-8">Analise detalhada baseada nos lancamentos operacionais de campo.</p>
+            {partialWarnings.length > 0 && (
+                <div className="mb-6 p-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+                    <p className="font-semibold mb-1">Carregamento parcial detectado</p>
+                    <p>Algumas fontes falharam e foram ignoradas temporariamente:</p>
+                    <p className="mt-1 text-xs">{partialWarnings.slice(0, 4).join(' | ')}</p>
+                </div>
+            )}
 
             <div className="flex flex-wrap gap-2 bg-slate-200 p-1 rounded-lg mb-8 w-fit">
                 <button onClick={() => setActiveReport('CONSUMPTION')} className={`flex items-center px-4 md:px-6 py-2 rounded-md text-xs md:text-sm font-semibold transition-colors ${activeReport === 'CONSUMPTION' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:bg-slate-300'}`}><CubeIcon className="h-4 w-4 mr-2" />Consumo</button>
@@ -348,6 +463,13 @@ const ReportsView: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
+                                {consumptionData.length === 0 && (
+                                    <tr>
+                                        <td className="p-4 text-slate-500" colSpan={5}>
+                                            Nenhum dado de consumo disponivel para o periodo.
+                                        </td>
+                                    </tr>
+                                )}
                                 {consumptionData.map((row) => (
                                     <tr key={row.id} className="border-b hover:bg-slate-50">
                                         <td className="p-4 font-bold text-slate-700">{row.product}</td>
@@ -363,31 +485,56 @@ const ReportsView: React.FC = () => {
                 </div>
             )}
 
-            {activeReport === 'CAPACITY' && capacityData && (
-                <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
-                        <h3 className="text-xl font-bold text-slate-800 mb-6">Tempo de Producao (Ciclo Atual)</h3>
-                        <div className="relative pt-6 pb-2">
-                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2 uppercase">
-                                <span>Inicio: {capacityData.cycleStart}</span>
-                                <span>Hoje (Dia {capacityData.daysElapsed})</span>
-                                <span>Meta: {capacityData.projectedEnd}</span>
+            {activeReport === 'CAPACITY' && (
+                <div className="animate-fade-in">
+                    {capacityData ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                                <h3 className="text-xl font-bold text-slate-800 mb-6">Tempo de Producao (Ciclo Atual)</h3>
+                                <div className="relative pt-6 pb-2">
+                                    <div className="flex justify-between text-xs font-bold text-slate-500 mb-2 uppercase">
+                                        <span>Inicio: {capacityData.cycleStart}</span>
+                                        <span>Hoje (Dia {capacityData.daysElapsed})</span>
+                                        <span>Meta: {capacityData.projectedEnd}</span>
+                                    </div>
+                                    <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${capacityProgressPercent}%` }}></div>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${(capacityData.daysElapsed / capacityData.totalDays) * 100}%` }}></div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                                <h3 className="text-xl font-bold text-slate-800 mb-6">Capacidade & Evolucao</h3>
+                                <ul className="space-y-4">
+                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Animais Entrados</span><span className="font-bold text-slate-800">{capacityData.animalsIn}</span></li>
+                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Mortalidade / Perda</span><span className="font-bold text-red-600">{capacityData.mortality} ({capacityMortalityPercent.toFixed(1)}%)</span></li>
+                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Peso Atual Medio</span><span className="font-bold text-indigo-600">{capacityData.currentWeight}</span></li>
+                                    <li className="flex justify-between items-center p-3 border border-indigo-100 bg-indigo-50 rounded"><span className="text-sm font-bold text-indigo-800">Peso Meta (Abate)</span><span className="font-bold text-indigo-800">{capacityData.projectedWeight}</span></li>
+                                </ul>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
-                        <h3 className="text-xl font-bold text-slate-800 mb-6">Capacidade & Evolucao</h3>
-                        <ul className="space-y-4">
-                            <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Animais Entrados</span><span className="font-bold text-slate-800">{capacityData.animalsIn}</span></li>
-                            <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Mortalidade / Perda</span><span className="font-bold text-red-600">{capacityData.mortality} ({((capacityData.mortality / capacityData.animalsIn) * 100).toFixed(1)}%)</span></li>
-                            <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Peso Atual Medio</span><span className="font-bold text-indigo-600">{capacityData.currentWeight}</span></li>
-                            <li className="flex justify-between items-center p-3 border border-indigo-100 bg-indigo-50 rounded"><span className="text-sm font-bold text-indigo-800">Peso Meta (Abate)</span><span className="font-bold text-indigo-800">{capacityData.projectedWeight}</span></li>
-                        </ul>
-                    </div>
+                    ) : (
+                        <div className="bg-white p-8 rounded-xl shadow-md border border-slate-200">
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">Capacidade produtiva indisponivel</h3>
+                            <p className="text-sm text-slate-600 mb-4">
+                                Nao encontramos o documento `reportCapacity/current` no Firestore ou houve falha de leitura.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-4 bg-slate-50 rounded border border-slate-200">
+                                    <p className="text-xs uppercase font-bold text-slate-500">Animais cadastrados</p>
+                                    <p className="text-xl font-bold text-slate-800">{registryKpis.totalAnimals}</p>
+                                </div>
+                                <div className="p-4 bg-slate-50 rounded border border-slate-200">
+                                    <p className="text-xs uppercase font-bold text-slate-500">Despesa operacional</p>
+                                    <p className="text-xl font-bold text-slate-800">{formatCurrency(registryKpis.totalExpenses)}</p>
+                                </div>
+                                <div className="p-4 bg-slate-50 rounded border border-slate-200">
+                                    <p className="text-xs uppercase font-bold text-slate-500">Custo por cabeca</p>
+                                    <p className="text-xl font-bold text-slate-800">{formatCurrency(registryKpis.costPerHead)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

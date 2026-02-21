@@ -25,9 +25,11 @@ const TechnicianDashboard: React.FC = () => {
   const [reports, setReports] = useState<TechnicianReportItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
+  const toErrorMessage = (reason: unknown) => (reason instanceof Error ? reason.message : 'erro desconhecido');
 
   const techAccount = useMemo(() => {
-      return accounts.find((account) => account.userId === 'Técnico') || accounts[0] || null;
+      return accounts.find((account) => account.userId === 'TÃ©cnico') || accounts[0] || null;
   }, [accounts]);
 
   const accountTransactions = useMemo(() => {
@@ -41,22 +43,53 @@ const TechnicianDashboard: React.FC = () => {
       const loadTechnician = async () => {
           setIsLoading(true);
           setLoadError(null);
-          try {
-              const [loadedAccounts, loadedTransactions, loadedKpis, loadedReports] = await Promise.all([
-                  financialService.listBankAccounts(),
-                  financialService.listTransactions(),
-                  technicianService.listKpis(),
-                  technicianService.listReports(),
-              ]);
-              setAccounts(loadedAccounts);
-              setTransactions(loadedTransactions);
-              setKpis(loadedKpis);
-              setReports(loadedReports);
-          } catch {
-              setLoadError('Nao foi possivel carregar o painel do tecnico.');
-          } finally {
-              setIsLoading(false);
+          setPartialWarnings([]);
+
+          const [loadedAccounts, loadedTransactions, loadedKpis, loadedReports] = await Promise.allSettled([
+              financialService.listBankAccounts(),
+              financialService.listTransactions(),
+              technicianService.listKpis(),
+              technicianService.listReports(),
+          ]);
+
+          const warnings: string[] = [];
+          const hasAnySuccess = [loadedAccounts, loadedTransactions, loadedKpis, loadedReports].some((entry) => entry.status === 'fulfilled');
+
+          if (loadedAccounts.status === 'fulfilled') {
+              setAccounts(loadedAccounts.value);
+          } else {
+              setAccounts([]);
+              warnings.push(`Contas: ${toErrorMessage(loadedAccounts.reason)}`);
           }
+
+          if (loadedTransactions.status === 'fulfilled') {
+              setTransactions(loadedTransactions.value);
+          } else {
+              setTransactions([]);
+              warnings.push(`Transacoes: ${toErrorMessage(loadedTransactions.reason)}`);
+          }
+
+          if (loadedKpis.status === 'fulfilled') {
+              setKpis(loadedKpis.value);
+          } else {
+              setKpis([]);
+              warnings.push(`KPIs: ${toErrorMessage(loadedKpis.reason)}`);
+          }
+
+          if (loadedReports.status === 'fulfilled') {
+              setReports(loadedReports.value);
+          } else {
+              setReports([]);
+              warnings.push(`Relatorios: ${toErrorMessage(loadedReports.reason)}`);
+          }
+
+          if (!hasAnySuccess) {
+              setLoadError('Nao foi possivel carregar o painel do tecnico.');
+          } else if (warnings.length > 0) {
+              setPartialWarnings(warnings);
+          }
+
+          setIsLoading(false);
       };
 
       void loadTechnician();
@@ -86,6 +119,11 @@ const TechnicianDashboard: React.FC = () => {
 
   return (
     <div>
+      {partialWarnings.length > 0 && (
+        <div className="mb-4 p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-700 text-sm">
+          Dados carregados parcialmente. Itens com falha: {partialWarnings.slice(0, 3).join(' | ')}
+        </div>
+      )}
       <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-3xl font-bold text-slate-800 mb-2">Painel do Tecnico</h2>
@@ -105,6 +143,11 @@ const TechnicianDashboard: React.FC = () => {
         {kpis.map((kpi) => (
             <KpiCard key={kpi.id} title={kpi.label} value={kpi.value} icon={UsersIcon} />
         ))}
+        {kpis.length === 0 && (
+          <div className="bg-white p-6 rounded-lg shadow-md text-center md:col-span-2 xl:col-span-4 text-slate-500">
+            Nenhum KPI tecnico disponivel no momento.
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="bg-white p-6 rounded-lg shadow-md md:col-span-2">
@@ -120,6 +163,7 @@ const TechnicianDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-md md:col-span-2">
              <h3 className="text-xl font-bold text-slate-800 mb-4">Relatorios Recentes</h3>
              <ul className="space-y-3">
+                {reports.length === 0 && <li className="text-sm text-slate-500">Nenhum relatorio recente encontrado.</li>}
                 {reports.map((report) => (
                     <li key={report.id} className="text-sm"><span className="font-semibold text-slate-700">{report.title}</span> - {report.location} <span className="text-slate-500">({report.dateLabel})</span></li>
                 ))}
@@ -131,3 +175,4 @@ const TechnicianDashboard: React.FC = () => {
 };
 
 export default TechnicianDashboard;
+
