@@ -38,7 +38,6 @@ const FieldOperationsView = lazy(() => import('./components/views/producer/Field
 const ReportsView = lazy(() => import('./components/views/producer/ReportsView'));
 const CarbonMarketView = lazy(() => import('./components/views/producer/CarbonMarketView'));
 const CustomInputRequestView = lazy(() => import('./components/views/producer/CustomInputRequestView'));
-const MobileAppView = lazy(() => import('./components/views/mobile/MobileAppView'));
 const FinanceView = lazy(() => import('./components/views/FinanceView'));
 const LegalView = lazy(() => import('./components/views/LegalView'));
 const IntegratorDashboard = lazy(() => import('./components/dashboards/IntegratorDashboard'));
@@ -75,7 +74,6 @@ const PATH_TO_VIEW_MAP: Record<string, ViewType> = {
   '/carbon-market': 'carbonMarket',
   '/custom-input-request': 'customInputRequest',
   '/operator-portal': 'operatorPortal',
-  '/mobile-app': 'mobileApp',
   '/technician-portal': 'technicianPortal',
   '/investor-portal': 'investorPortal',
   '/supplier-portal': 'supplierPortal',
@@ -350,7 +348,7 @@ const AppContent: React.FC = () => {
               <Route element={<LegalView />} path="legal" />
               <Route element={<IntegratorDashboard />} path="integrator-portal" />
             </Route>
-            <Route element={<FullscreenLayout><MobileAppView /></FullscreenLayout>} path="mobile-app" />
+            <Route element={<Navigate replace to={defaultRoute} />} path="mobile-app" />
           </Route>
         </Route>
         <Route element={<Navigate replace to="/" />} path="*" />
