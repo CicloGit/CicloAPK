@@ -137,13 +137,15 @@ const Sidebar: React.FC = () => {
   };
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors duration-200 ${
-      isActive ? 'bg-emerald-500 text-white' : 'hover:bg-slate-700 text-slate-300'
+    `w-full text-left flex items-center p-2.5 my-1 rounded-xl transition-colors duration-200 ${
+      isActive
+        ? 'bg-slate-900 text-white shadow-[0_8px_24px_rgba(15,23,42,0.22)]'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
     }`;
 
   const subNavLinkClass = ({ isActive }: { isActive: boolean }) =>
     `w-full text-left flex items-center p-2 my-1 rounded-lg transition-colors duration-200 text-xs ${
-      isActive ? 'bg-emerald-500 text-white' : 'hover:bg-slate-700 text-slate-300'
+      isActive ? 'bg-teal-50 text-teal-800 border border-teal-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
     }`;
 
   const navSections = [
@@ -163,8 +165,10 @@ const Sidebar: React.FC = () => {
         <div>
           <button
             onClick={() => setProducerNavOpen(!isProducerNavOpen)}
-            className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors duration-200 ${
-              isProducerSubNavActive ? 'bg-slate-700 text-white' : 'hover:bg-slate-700 text-slate-300'
+            className={`w-full text-left flex items-center p-2.5 my-1 rounded-xl transition-colors duration-200 ${
+              isProducerSubNavActive
+                ? 'bg-slate-900 text-white shadow-[0_8px_24px_rgba(15,23,42,0.22)]'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <BriefcaseIcon className="h-6 w-6 mr-3 flex-shrink-0" />
@@ -172,7 +176,7 @@ const Sidebar: React.FC = () => {
             <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform ${isProducerNavOpen ? 'rotate-180' : ''}`} />
           </button>
           {isProducerNavOpen && (
-            <ul className="pl-6 border-l-2 border-slate-700 ml-3 animate-slide-down">
+            <ul className="pl-6 border-l-2 border-slate-200 ml-3 animate-slide-down">
               {producerSubNav.map((subItem) => (
                 <li key={subItem.id}>
                   <NavLink to={subItem.path} className={subNavLinkClass} end>
@@ -190,7 +194,7 @@ const Sidebar: React.FC = () => {
     // Default navigation for other roles
     return navSections.map((section) => (
       <div key={section.title}>
-        <h2 className="px-3 py-2 text-xs font-bold uppercase text-slate-500">{section.title}</h2>
+        <h2 className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">{section.title}</h2>
         <ul>
           {section.items
             .filter((item) => isViewAllowed(item.id))
@@ -210,31 +214,31 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 bg-slate-800 text-slate-200 flex flex-col h-full">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-white">
-          Ciclo<span className="text-emerald-400">+</span>
+    <aside className="w-full md:w-64 bg-white/86 backdrop-blur-2xl text-slate-700 flex flex-col h-full border-r border-slate-200/80 shadow-[0_0_0_1px_rgba(15,23,42,0.04)]">
+      <div className="p-6 border-b border-slate-200/80">
+        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+          Ciclo<span className="text-teal-600">+</span>
         </h1>
-        <p className="text-sm text-slate-400">ERP Agro</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-400 mt-1">ERP Agro</p>
       </div>
       <nav className="flex-1 px-4 overflow-y-auto custom-scrollbar">{renderNavForRole()}</nav>
-      <div className="p-4 border-t border-slate-700 bg-slate-900">
+      <div className="p-4 border-t border-slate-200/80 bg-white/75">
         {selectedProduction && currentUser.role === 'Produtor' && (
-          <div className="mb-4 p-3 bg-slate-800 rounded-lg border border-slate-700">
-            <p className="text-xs text-slate-400">Atividade Ativa:</p>
-            <p className="text-sm font-bold text-emerald-400 truncate">{selectedProduction.name}</p>
+          <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400">Atividade ativa</p>
+            <p className="text-sm font-semibold text-slate-800 truncate">{selectedProduction.name}</p>
             <p className="text-[10px] text-slate-500 uppercase mt-1">{selectedProduction.type}</p>
           </div>
         )}
         <div className="flex items-center">
           <div>
-            <p className="text-sm font-semibold text-white">{currentUser.name}</p>
-            <p className="text-xs text-slate-400">{currentUser.role}</p>
+            <p className="text-sm font-semibold text-slate-900">{currentUser.name}</p>
+            <p className="text-xs text-slate-500">{currentUser.role}</p>
           </div>
           <button
             onClick={handleLogout}
             title="Sair"
-            className="ml-auto p-2 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="ml-auto p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <LogoutIcon className="h-5 w-5" />
           </button>

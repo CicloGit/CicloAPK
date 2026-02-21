@@ -119,58 +119,114 @@ const supportsHoverPointer = (): boolean => {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 };
 
+const isMobileScreen = (): boolean => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+
+  return window.matchMedia('(max-width: 1023px)').matches;
+};
+
+const MenuIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
 const MainLayout = () => {
   const { currentUser } = useApp();
   const location = useLocation();
   const hideSidebarForProducerDashboard = currentUser?.role === 'Produtor' && location.pathname === '/dashboard';
   const [isAutoHideSidebar, setAutoHideSidebar] = useState(supportsHoverPointer);
-  const [isSidebarVisible, setSidebarVisible] = useState(() => !supportsHoverPointer());
+  const [isSidebarVisible, setSidebarVisible] = useState(() => (isMobileScreen() ? false : !supportsHoverPointer()));
+  const [isMobileViewport, setMobileViewport] = useState(isMobileScreen);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const pointerMediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const mobileMediaQuery = window.matchMedia('(max-width: 1023px)');
 
-    const syncSidebarMode = (matches: boolean) => {
-      setAutoHideSidebar(matches);
-      setSidebarVisible(!matches);
+    const syncSidebarMode = () => {
+      const isMobile = mobileMediaQuery.matches;
+      setMobileViewport(isMobile);
+
+      if (isMobile) {
+        setAutoHideSidebar(false);
+        setSidebarVisible(false);
+        return;
+      }
+
+      const supportsHover = pointerMediaQuery.matches;
+      setAutoHideSidebar(supportsHover);
+      setSidebarVisible(!supportsHover);
     };
 
-    syncSidebarMode(mediaQuery.matches);
+    syncSidebarMode();
 
-    const handleChange = (event: MediaQueryListEvent) => {
-      syncSidebarMode(event.matches);
+    const handleChange = () => {
+      syncSidebarMode();
     };
 
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
+    if (typeof pointerMediaQuery.addEventListener === 'function' && typeof mobileMediaQuery.addEventListener === 'function') {
+      pointerMediaQuery.addEventListener('change', handleChange);
+      mobileMediaQuery.addEventListener('change', handleChange);
+      return () => {
+        pointerMediaQuery.removeEventListener('change', handleChange);
+        mobileMediaQuery.removeEventListener('change', handleChange);
+      };
     }
 
-    mediaQuery.addListener(handleChange);
-    return () => mediaQuery.removeListener(handleChange);
+    pointerMediaQuery.addListener(handleChange);
+    mobileMediaQuery.addListener(handleChange);
+    return () => {
+      pointerMediaQuery.removeListener(handleChange);
+      mobileMediaQuery.removeListener(handleChange);
+    };
   }, []);
 
+  useEffect(() => {
+    if (isMobileViewport) {
+      setSidebarVisible(false);
+    }
+  }, [location.pathname, isMobileViewport]);
+
   const showSidebar = () => {
+    if (isMobileViewport) {
+      setSidebarVisible(true);
+      return;
+    }
     if (isAutoHideSidebar) {
       setSidebarVisible(true);
     }
   };
 
   const hideSidebar = () => {
+    if (isMobileViewport) {
+      setSidebarVisible(false);
+      return;
+    }
     if (isAutoHideSidebar) {
       setSidebarVisible(false);
     }
   };
 
+  const shouldRenderSidebar = !hideSidebarForProducerDashboard;
+
   return (
-    <div className="relative flex h-screen bg-slate-100 font-sans">
-      {!hideSidebarForProducerDashboard && isAutoHideSidebar && (
+    <div className="relative flex h-screen app-shell-background">
+      {shouldRenderSidebar && isAutoHideSidebar && !isMobileViewport && (
         <div
           aria-hidden="true"
           className="absolute inset-y-0 left-0 z-40 w-3"
           onMouseEnter={showSidebar}
         />
       )}
-      {!hideSidebarForProducerDashboard && (
+      {shouldRenderSidebar && !isMobileViewport && (
         <div
           className={`h-full overflow-hidden transition-[width] duration-200 ease-out ${
             isSidebarVisible ? 'w-64' : 'w-0'
@@ -181,19 +237,56 @@ const MainLayout = () => {
           <Sidebar />
         </div>
       )}
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8" onMouseEnter={hideSidebar}>
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingFallback />}>
-            <Outlet />
-          </Suspense>
-        </ErrorBoundary>
+
+      {shouldRenderSidebar && isMobileViewport && (
+        <>
+          {isSidebarVisible && (
+            <button
+              aria-label="Fechar menu lateral"
+              className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[1px]"
+              onClick={hideSidebar}
+              type="button"
+            />
+          )}
+          <div
+            className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[86vw] transform transition-transform duration-300 ease-out ${
+              isSidebarVisible ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <Sidebar />
+          </div>
+        </>
+      )}
+
+      <main
+        className={`min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 ${isMobileViewport ? 'pt-20' : ''}`}
+        onMouseEnter={hideSidebar}
+      >
+        {shouldRenderSidebar && isMobileViewport && (
+          <button
+            aria-label={isSidebarVisible ? 'Fechar menu' : 'Abrir menu'}
+            className="fixed left-4 top-4 z-30 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg backdrop-blur-sm"
+            onClick={() => setSidebarVisible((prev) => !prev)}
+            type="button"
+          >
+            {isSidebarVisible ? <CloseIcon className="h-4 w-4" /> : <MenuIcon className="h-4 w-4" />}
+            Menu
+          </button>
+        )}
+        <div className="mx-auto w-full max-w-[1500px]">
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
       </main>
     </div>
   );
 };
 
 const FullscreenLayout = ({ children }: { children: React.ReactNode }) => (
-  <main className="h-screen overflow-y-auto">
+  <main className="h-screen overflow-y-auto app-shell-background">
     <ErrorBoundary>
       <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
     </ErrorBoundary>
