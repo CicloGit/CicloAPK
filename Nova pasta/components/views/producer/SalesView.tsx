@@ -5,6 +5,7 @@ import {
   Pasture,
   ProducerAnimal,
   ProducerAnimalLot,
+  ProducerEscrowStatus,
   ProducerFiscalStatus,
   ProducerPdvSale,
   ProducerSaleSettlementMode,
@@ -38,6 +39,14 @@ const FiscalBadge: React.FC<{ status: ProducerFiscalStatus }> = ({ status }) => 
     NF_EMITIDA: 'bg-emerald-100 text-emerald-700',
     AGUARDANDO_FINALIZACAO_LEILAO: 'bg-amber-100 text-amber-700',
     AGUARDANDO_EMISSAO: 'bg-slate-100 text-slate-700',
+  };
+  return <span className={`px-2 py-1 rounded text-xs font-semibold ${styleMap[status]}`}>{status}</span>;
+};
+
+const EscrowBadge: React.FC<{ status: ProducerEscrowStatus }> = ({ status }) => {
+  const styleMap: Record<ProducerEscrowStatus, string> = {
+    ATIVO: 'bg-indigo-100 text-indigo-700',
+    LIBERADO: 'bg-emerald-100 text-emerald-700',
   };
   return <span className={`px-2 py-1 rounded text-xs font-semibold ${styleMap[status]}`}>{status}</span>;
 };
@@ -556,8 +565,8 @@ const SalesView: React.FC = () => {
       resetPdvForm();
       setActionMessage(
         created.fiscalStatus === 'NF_EMITIDA'
-          ? `Venda registrada e NF ${created.fiscalDocumentNumber ?? ''} emitida automaticamente.`
-          : 'Venda/remessa registrada com auditoria. NF pendente conforme regra fiscal.'
+          ? `Venda registrada com escrow ${created.escrowStatus.toLowerCase()} e NF ${created.fiscalDocumentNumber ?? ''} emitida automaticamente.`
+          : `Venda/remessa registrada com escrow ativo. NF pendente conforme regra fiscal.`
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nao foi possivel registrar a operacao PDV.';
@@ -574,7 +583,7 @@ const SalesView: React.FC = () => {
     try {
       const updated = await salesService.finalizeAuctionAndIssueInvoice(saleId, actorLabel);
       setPdvSales((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      setActionMessage(`Leilao finalizado e NF ${updated.fiscalDocumentNumber ?? ''} emitida.`);
+      setActionMessage(`Leilao finalizado, NF ${updated.fiscalDocumentNumber ?? ''} emitida e escrow liberado.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nao foi possivel finalizar o leilao.';
       setActionError(message);
@@ -590,7 +599,7 @@ const SalesView: React.FC = () => {
     try {
       const updated = await salesService.issuePendingFiscalDocument(saleId, actorLabel);
       setPdvSales((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      setActionMessage(`NF ${updated.fiscalDocumentNumber ?? ''} emitida para a operacao pendente.`);
+      setActionMessage(`NF ${updated.fiscalDocumentNumber ?? ''} emitida para a operacao pendente e escrow liberado.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Nao foi possivel emitir a NF pendente.';
       setActionError(message);
@@ -982,6 +991,7 @@ const SalesView: React.FC = () => {
                     <th className="px-4 py-3 text-left">Liquidacao</th>
                     <th className="px-4 py-3 text-left">Valor</th>
                     <th className="px-4 py-3 text-left">Fiscal</th>
+                    <th className="px-4 py-3 text-left">Escrow</th>
                     <th className="px-4 py-3 text-left">Evidencias</th>
                     <th className="px-4 py-3 text-right">Acao</th>
                   </tr>
@@ -989,7 +999,7 @@ const SalesView: React.FC = () => {
                 <tbody>
                   {pdvSales.length === 0 && (
                     <tr>
-                      <td className="px-4 py-6 text-slate-500" colSpan={7}>
+                      <td className="px-4 py-6 text-slate-500" colSpan={8}>
                         Nenhuma operacao PDV registrada.
                       </td>
                     </tr>
@@ -1016,6 +1026,14 @@ const SalesView: React.FC = () => {
                         <div className="space-y-1">
                           <FiscalBadge status={sale.fiscalStatus} />
                           <p className="text-xs text-slate-500">{sale.fiscalDocumentNumber ?? 'NF pendente'}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <EscrowBadge status={sale.escrowStatus} />
+                          <p className="text-xs text-slate-500">
+                            {sale.escrowId ?? 'ESC-N/A'} | {formatCurrency(sale.escrowAmount)}
+                          </p>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600">{sale.evidences.length} arquivo(s)/leitura(s)</td>

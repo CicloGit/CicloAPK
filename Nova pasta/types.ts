@@ -364,6 +364,7 @@ export type ProducerFiscalStatus =
     | 'NF_EMITIDA'
     | 'AGUARDANDO_FINALIZACAO_LEILAO'
     | 'AGUARDANDO_EMISSAO';
+export type ProducerEscrowStatus = 'ATIVO' | 'LIBERADO';
 export type ProducerSaleEvidenceType =
     | 'QR_CODE'
     | 'SCALE_QR'
@@ -405,6 +406,11 @@ export interface ProducerPdvSale {
     sourceType: ProducerSaleSourceType;
     settlementMode: ProducerSaleSettlementMode;
     fiscalStatus: ProducerFiscalStatus;
+    escrowStatus: ProducerEscrowStatus;
+    escrowAmount: number;
+    escrowId?: string;
+    escrowCreatedAt?: string;
+    escrowReleasedAt?: string;
     buyer: string;
     description: string;
     unitPrice: number;

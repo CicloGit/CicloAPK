@@ -17,6 +17,7 @@ import { parseDateToTimestamp } from './dateUtils';
 import {
   AuditEvent,
   ConsumerMarketChannel,
+  ProducerEscrowStatus,
   ProducerFiscalStatus,
   ProducerPdvSale,
   ProducerSaleEvidence,
@@ -108,35 +109,52 @@ const normalizeFiscalStatus = (value: unknown): ProducerFiscalStatus => {
   return 'AGUARDANDO_EMISSAO';
 };
 
-const toPdvSale = (id: string, raw: Record<string, unknown>): ProducerPdvSale => ({
-  id,
-  createdAt: String(raw.createdAt ?? nowLabel()),
-  sourceType: normalizeSourceType(raw.sourceType),
-  settlementMode: normalizeSettlementMode(raw.settlementMode),
-  fiscalStatus: normalizeFiscalStatus(raw.fiscalStatus),
-  buyer: String(raw.buyer ?? ''),
-  description: String(raw.description ?? ''),
-  unitPrice: Number(raw.unitPrice ?? 0),
-  totalValue: Number(raw.totalValue ?? 0),
-  actor: String(raw.actor ?? 'Produtor'),
-  lotId: raw.lotId ? String(raw.lotId) : undefined,
-  animalIds: Array.isArray(raw.animalIds) ? (raw.animalIds as string[]).map((item) => String(item)) : undefined,
-  headcount: raw.headcount !== undefined && raw.headcount !== null ? Number(raw.headcount) : undefined,
-  totalWeightKg: raw.totalWeightKg !== undefined && raw.totalWeightKg !== null ? Number(raw.totalWeightKg) : undefined,
-  fieldPlot: raw.fieldPlot ? String(raw.fieldPlot) : undefined,
-  boxes: raw.boxes !== undefined && raw.boxes !== null ? Number(raw.boxes) : undefined,
-  assetItemId: raw.assetItemId ? String(raw.assetItemId) : undefined,
-  assetName: raw.assetName ? String(raw.assetName) : undefined,
-  saleAuthorizationCode: raw.saleAuthorizationCode ? String(raw.saleAuthorizationCode) : undefined,
-  vehiclePlate: raw.vehiclePlate ? String(raw.vehiclePlate) : undefined,
-  scaleQrCode: raw.scaleQrCode ? String(raw.scaleQrCode) : undefined,
-  deferFiscalEmission: Boolean(raw.deferFiscalEmission),
-  auctionFinishedAt: raw.auctionFinishedAt ? String(raw.auctionFinishedAt) : undefined,
-  fiscalDocumentNumber: raw.fiscalDocumentNumber ? String(raw.fiscalDocumentNumber) : undefined,
-  fiscalIssuedAt: raw.fiscalIssuedAt ? String(raw.fiscalIssuedAt) : undefined,
-  evidences: Array.isArray(raw.evidences) ? raw.evidences.map((item) => toSaleEvidence(item)) : [],
-  auditHash: raw.auditHash ? String(raw.auditHash) : undefined,
-});
+const normalizeEscrowStatus = (value: unknown, fallbackFiscal?: ProducerFiscalStatus): ProducerEscrowStatus => {
+  const normalized = String(value ?? '').toUpperCase();
+  if (normalized === 'ATIVO' || normalized === 'LIBERADO') {
+    return normalized as ProducerEscrowStatus;
+  }
+  return fallbackFiscal === 'NF_EMITIDA' ? 'LIBERADO' : 'ATIVO';
+};
+
+const toPdvSale = (id: string, raw: Record<string, unknown>): ProducerPdvSale => {
+  const fiscalStatus = normalizeFiscalStatus(raw.fiscalStatus);
+  const totalValue = Number(raw.totalValue ?? 0);
+  return {
+    id,
+    createdAt: String(raw.createdAt ?? nowLabel()),
+    sourceType: normalizeSourceType(raw.sourceType),
+    settlementMode: normalizeSettlementMode(raw.settlementMode),
+    fiscalStatus,
+    escrowStatus: normalizeEscrowStatus(raw.escrowStatus, fiscalStatus),
+    escrowAmount: raw.escrowAmount !== undefined && raw.escrowAmount !== null ? Number(raw.escrowAmount) : Number(totalValue ?? 0),
+    escrowId: raw.escrowId ? String(raw.escrowId) : undefined,
+    escrowCreatedAt: raw.escrowCreatedAt ? String(raw.escrowCreatedAt) : undefined,
+    escrowReleasedAt: raw.escrowReleasedAt ? String(raw.escrowReleasedAt) : undefined,
+    buyer: String(raw.buyer ?? ''),
+    description: String(raw.description ?? ''),
+    unitPrice: Number(raw.unitPrice ?? 0),
+    totalValue,
+    actor: String(raw.actor ?? 'Produtor'),
+    lotId: raw.lotId ? String(raw.lotId) : undefined,
+    animalIds: Array.isArray(raw.animalIds) ? (raw.animalIds as string[]).map((item) => String(item)) : undefined,
+    headcount: raw.headcount !== undefined && raw.headcount !== null ? Number(raw.headcount) : undefined,
+    totalWeightKg: raw.totalWeightKg !== undefined && raw.totalWeightKg !== null ? Number(raw.totalWeightKg) : undefined,
+    fieldPlot: raw.fieldPlot ? String(raw.fieldPlot) : undefined,
+    boxes: raw.boxes !== undefined && raw.boxes !== null ? Number(raw.boxes) : undefined,
+    assetItemId: raw.assetItemId ? String(raw.assetItemId) : undefined,
+    assetName: raw.assetName ? String(raw.assetName) : undefined,
+    saleAuthorizationCode: raw.saleAuthorizationCode ? String(raw.saleAuthorizationCode) : undefined,
+    vehiclePlate: raw.vehiclePlate ? String(raw.vehiclePlate) : undefined,
+    scaleQrCode: raw.scaleQrCode ? String(raw.scaleQrCode) : undefined,
+    deferFiscalEmission: Boolean(raw.deferFiscalEmission),
+    auctionFinishedAt: raw.auctionFinishedAt ? String(raw.auctionFinishedAt) : undefined,
+    fiscalDocumentNumber: raw.fiscalDocumentNumber ? String(raw.fiscalDocumentNumber) : undefined,
+    fiscalIssuedAt: raw.fiscalIssuedAt ? String(raw.fiscalIssuedAt) : undefined,
+    evidences: Array.isArray(raw.evidences) ? raw.evidences.map((item) => toSaleEvidence(item)) : [],
+    auditHash: raw.auditHash ? String(raw.auditHash) : undefined,
+  };
+};
 
 const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => ({
   id,
@@ -326,6 +344,11 @@ export const salesService = {
     assertPdvRules(payload);
 
     const shouldEmitFiscalNow = payload.settlementMode === 'DIRECT_SALE' && !payload.deferFiscalEmission;
+    const shouldReleaseEscrowNow = payload.settlementMode === 'DIRECT_SALE' && !payload.deferFiscalEmission;
+    const totalValue = computeTotalValue(payload);
+    const escrowId = `ESC-${Date.now()}`;
+    const escrowCreatedAt = nowLabel();
+    const escrowReleasedAt = shouldReleaseEscrowNow ? nowLabel() : undefined;
     const fiscalStatus: ProducerFiscalStatus =
       payload.settlementMode === 'AUCTION_REMESSA'
         ? 'AGUARDANDO_FINALIZACAO_LEILAO'
@@ -339,10 +362,15 @@ export const salesService = {
       sourceType: payload.sourceType,
       settlementMode: payload.settlementMode,
       fiscalStatus,
+      escrowStatus: shouldReleaseEscrowNow ? 'LIBERADO' : 'ATIVO',
+      escrowAmount: totalValue,
+      escrowId,
+      escrowCreatedAt,
+      escrowReleasedAt,
       buyer: payload.buyer.trim(),
       description: payload.description.trim(),
       unitPrice: sanitizeNumber(payload.unitPrice),
-      totalValue: computeTotalValue(payload),
+      totalValue,
       actor: payload.actor.trim() || 'Produtor',
       lotId: payload.lotId?.trim() || undefined,
       animalIds: payload.animalIds?.map((item) => item.trim()).filter((item) => item.length > 0),
@@ -377,7 +405,14 @@ export const salesService = {
       details: `${newSale.sourceType} | ${newSale.settlementMode} | comprador=${newSale.buyer} | valor=${newSale.totalValue.toFixed(2)}`,
     });
 
+    const escrowCreatedAudit = await appendAuditEvent({
+      actor: newSale.actor,
+      action: 'PDV_ESCROW_CREATED',
+      details: `Escrow ${newSale.escrowId} criado para ${newSale.id} no valor ${newSale.escrowAmount.toFixed(2)}.`,
+    });
+
     let latestAuditHash = saleRegisteredAudit.hash;
+    latestAuditHash = escrowCreatedAudit.hash;
     if (shouldEmitFiscalNow) {
       const fiscalAudit = await appendAuditEvent({
         actor: newSale.actor,
@@ -385,6 +420,15 @@ export const salesService = {
         details: `NF ${newSale.fiscalDocumentNumber} emitida automaticamente para venda direta ${newSale.id}.`,
       });
       latestAuditHash = fiscalAudit.hash;
+    }
+
+    if (shouldReleaseEscrowNow) {
+      const escrowReleasedAudit = await appendAuditEvent({
+        actor: newSale.actor,
+        action: 'PDV_ESCROW_RELEASED',
+        details: `Escrow ${newSale.escrowId} liberado automaticamente para venda direta ${newSale.id}.`,
+      });
+      latestAuditHash = escrowReleasedAudit.hash;
     }
 
     await updateDoc(doc(db, 'producerPdvSales', newSale.id), {
@@ -463,22 +507,35 @@ export const salesService = {
 
     const fiscalDocumentNumber = generateFiscalDocumentNumber();
     const fiscalIssuedAt = nowLabel();
+    const escrowReleasedAt = nowLabel();
     await updateDoc(doc(db, 'producerPdvSales', sale.id), {
       fiscalStatus: 'NF_EMITIDA',
       fiscalDocumentNumber,
       fiscalIssuedAt,
+      escrowStatus: 'LIBERADO',
+      escrowReleasedAt,
       auctionFinishedAt: nowLabel(),
       updatedAt: serverTimestamp(),
     });
 
-    const audit = await appendAuditEvent({
+    const fiscalAudit = await appendAuditEvent({
       actor,
       action: 'PDV_AUCTION_FINALIZED_NF_ISSUED',
       details: `Leilao finalizado para ${sale.id} com emissao da NF ${fiscalDocumentNumber}.`,
     });
 
+    let latestAuditHash = fiscalAudit.hash;
+    if (sale.escrowStatus !== 'LIBERADO') {
+      const escrowAudit = await appendAuditEvent({
+        actor,
+        action: 'PDV_ESCROW_RELEASED',
+        details: `Escrow ${sale.escrowId ?? '-'} liberado apos finalizacao do leilao ${sale.id}.`,
+      });
+      latestAuditHash = escrowAudit.hash;
+    }
+
     await updateDoc(doc(db, 'producerPdvSales', sale.id), {
-      auditHash: audit.hash,
+      auditHash: latestAuditHash,
       updatedAt: serverTimestamp(),
     });
 
@@ -487,8 +544,10 @@ export const salesService = {
       fiscalStatus: 'NF_EMITIDA',
       fiscalDocumentNumber,
       fiscalIssuedAt,
+      escrowStatus: 'LIBERADO',
+      escrowReleasedAt,
       auctionFinishedAt: nowLabel(),
-      auditHash: audit.hash,
+      auditHash: latestAuditHash,
     };
   },
 
@@ -505,21 +564,34 @@ export const salesService = {
 
     const fiscalDocumentNumber = generateFiscalDocumentNumber();
     const fiscalIssuedAt = nowLabel();
+    const escrowReleasedAt = nowLabel();
     await updateDoc(doc(db, 'producerPdvSales', sale.id), {
       fiscalStatus: 'NF_EMITIDA',
       fiscalDocumentNumber,
       fiscalIssuedAt,
+      escrowStatus: 'LIBERADO',
+      escrowReleasedAt,
       updatedAt: serverTimestamp(),
     });
 
-    const audit = await appendAuditEvent({
+    const fiscalAudit = await appendAuditEvent({
       actor,
       action: 'PDV_PENDING_NF_ISSUED',
       details: `NF ${fiscalDocumentNumber} emitida para venda pendente ${sale.id}.`,
     });
 
+    let latestAuditHash = fiscalAudit.hash;
+    if (sale.escrowStatus !== 'LIBERADO') {
+      const escrowAudit = await appendAuditEvent({
+        actor,
+        action: 'PDV_ESCROW_RELEASED',
+        details: `Escrow ${sale.escrowId ?? '-'} liberado apos emissao fiscal pendente para ${sale.id}.`,
+      });
+      latestAuditHash = escrowAudit.hash;
+    }
+
     await updateDoc(doc(db, 'producerPdvSales', sale.id), {
-      auditHash: audit.hash,
+      auditHash: latestAuditHash,
       updatedAt: serverTimestamp(),
     });
 
@@ -528,7 +600,9 @@ export const salesService = {
       fiscalStatus: 'NF_EMITIDA',
       fiscalDocumentNumber,
       fiscalIssuedAt,
-      auditHash: audit.hash,
+      escrowStatus: 'LIBERADO',
+      escrowReleasedAt,
+      auditHash: latestAuditHash,
     };
   },
 };
