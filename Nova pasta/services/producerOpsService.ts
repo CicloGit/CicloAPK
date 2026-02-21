@@ -124,6 +124,11 @@ const toExpense = (id: string, raw: Record<string, unknown>): ProducerExpense =>
   date: String(raw.date ?? ''),
   source: (raw.source as ProducerExpense['source']) ?? 'SISTEMA',
   relatedActivityId: raw.relatedActivityId ? String(raw.relatedActivityId) : undefined,
+  relatedPastureId: raw.relatedPastureId ? String(raw.relatedPastureId) : undefined,
+  areaHa: raw.areaHa !== undefined && raw.areaHa !== null ? Number(raw.areaHa) : undefined,
+  expectedRevenue: raw.expectedRevenue !== undefined && raw.expectedRevenue !== null ? Number(raw.expectedRevenue) : undefined,
+  realizedRevenue: raw.realizedRevenue !== undefined && raw.realizedRevenue !== null ? Number(raw.realizedRevenue) : undefined,
+  profit: raw.profit !== undefined && raw.profit !== null ? Number(raw.profit) : undefined,
 });
 
 const toActivity = (id: string, raw: Record<string, unknown>): ProducerOperationalActivity => ({
@@ -213,6 +218,11 @@ export const producerOpsService = {
       date: new Date().toLocaleString('pt-BR'),
       source: payload.source,
       relatedActivityId: payload.relatedActivityId,
+      relatedPastureId: payload.relatedPastureId,
+      areaHa: payload.areaHa,
+      expectedRevenue: payload.expectedRevenue,
+      realizedRevenue: payload.realizedRevenue,
+      profit: payload.profit,
     };
     await setDoc(doc(db, 'producerOperationalExpenses', newExpense.id), {
       ...newExpense,
@@ -292,4 +302,3 @@ export const producerOpsService = {
     return { totalAnimals, totalExpenses, costPerHead };
   },
 };
-

@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   serverTimestamp,
@@ -17,6 +18,13 @@ const toSalesOffer = (id: string, raw: Record<string, unknown>): SalesOffer => (
   quantity: String(raw.quantity ?? ''),
   price: Number(raw.price ?? 0),
   channel: (raw.channel as ConsumerMarketChannel) ?? 'WHOLESALE_DIRECT',
+  listingCategory: (raw.listingCategory as SalesOffer['listingCategory']) ?? 'OUTPUTS_PRODUCER',
+  listingMode: (raw.listingMode as SalesOffer['listingMode']) ?? 'FIXED_PRICE',
+  offerType: (raw.offerType as SalesOffer['offerType']) ?? 'PRODUTO',
+  description: raw.description ? String(raw.description) : undefined,
+  location: raw.location ? String(raw.location) : undefined,
+  auctionEndAt: raw.auctionEndAt ? String(raw.auctionEndAt) : undefined,
+  minimumBid: raw.minimumBid ? Number(raw.minimumBid) : undefined,
   status: (raw.status as SalesOffer['status']) ?? 'ATIVA',
   date: String(raw.date ?? new Date().toLocaleDateString('pt-BR')),
 });
@@ -29,13 +37,31 @@ export const salesService = {
       .sort((a: SalesOffer, b: SalesOffer) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
-  async createOffer(data: Pick<SalesOffer, 'product' | 'quantity' | 'price' | 'channel'>): Promise<SalesOffer> {
+  async createOffer(
+    data: Pick<SalesOffer, 'product' | 'quantity' | 'price'> &
+      Partial<
+        Pick<
+          SalesOffer,
+          'channel' | 'offerType' | 'listingMode' | 'description' | 'location' | 'auctionEndAt' | 'minimumBid' | 'listingCategory'
+        >
+      >
+  ): Promise<SalesOffer> {
+    const listingMode = data.listingMode ?? 'FIXED_PRICE';
+    const inferredCategory = listingMode === 'AUCTION' ? 'AUCTION_P2P' : 'OUTPUTS_PRODUCER';
+
     const newOffer: SalesOffer = {
       id: `SO-${Date.now()}`,
       product: data.product,
       quantity: data.quantity,
       price: data.price,
-      channel: data.channel,
+      channel: listingMode === 'AUCTION' ? undefined : (data.channel ?? 'WHOLESALE_DIRECT'),
+      listingMode,
+      listingCategory: data.listingCategory ?? inferredCategory,
+      offerType: data.offerType ?? 'PRODUTO',
+      description: data.description?.trim() || undefined,
+      location: data.location?.trim() || undefined,
+      auctionEndAt: listingMode === 'AUCTION' ? data.auctionEndAt : undefined,
+      minimumBid: listingMode === 'AUCTION' ? data.minimumBid : undefined,
       status: 'ATIVA',
       date: new Date().toLocaleDateString('pt-BR'),
     };
@@ -47,5 +73,9 @@ export const salesService = {
     });
 
     return newOffer;
+  },
+
+  async deleteOffer(offerId: string): Promise<void> {
+    await deleteDoc(doc(db, 'salesOffers', offerId));
   },
 };

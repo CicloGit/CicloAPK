@@ -1,377 +1,753 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import UsersIcon from '../icons/UsersIcon';
 import { CashIcon } from '../icons/CashIcon';
 import { BriefcaseIcon } from '../icons/BriefcaseIcon';
 import PlusCircleIcon from '../icons/PlusCircleIcon';
 import ShieldCheckIcon from '../icons/ShieldCheckIcon';
-import LockClosedIcon from '../icons/LockClosedIcon';
 import CheckCircleIcon from '../icons/CheckCircleIcon';
 import MapIcon from '../icons/MapIcon';
 import { CubeIcon } from '../icons/CubeIcon';
+import LockClosedIcon from '../icons/LockClosedIcon';
+import TrendingUpIcon from '../icons/TrendingUpIcon';
 import LoadingSpinner from '../shared/LoadingSpinner';
-import { integratorService } from '../../services/integratorService';
-import { IntegratedProducer, IntegratorMessage, PartnershipOffer } from '../../types';
+import { useApp } from '../../contexts/AppContext';
+import {
+  integratorService,
+  IntegratorApiAuthMode,
+  IntegratorApiLink,
+} from '../../services/integratorService';
+import { IntegratedProducer, PartnershipOffer } from '../../types';
 
-const KpiCard: React.FC<{ title: string; value: string; icon: React.FC<{className?: string}>; color: string }> = ({ title, value, icon: Icon, color }) => (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className={`flex items-center text-sm font-bold ${color}`}>
-            <Icon className="h-5 w-5 mr-2" />
-            {title}
-        </div>
-        <p className="text-3xl font-bold text-slate-800 mt-2">{value}</p>
+type IntegratorTab =
+  | 'PRODUCERS'
+  | 'DEMANDS'
+  | 'OFFERS'
+  | 'CONTRACT_SCHEDULE'
+  | 'FINANCE'
+  | 'RECEIVABLES'
+  | 'PAYMENTS';
+
+type FinanceEntryType = 'Investimento' | 'Antecipacao';
+type ReceivableRowStatus = 'Pendente' | 'Em Escrow' | 'Liquidado';
+type PaymentRowStatus = 'Agendado' | 'Processando' | 'Pago';
+
+interface ContractScheduleRow {
+  id: string;
+  producerName: string;
+  development: string;
+  contractType: string;
+  nextReportDate: string;
+  estimatedVolume: string;
+  status: 'Em Execucao' | 'Aguardando Assinatura' | 'Finalizado';
+}
+
+interface FinanceEntry {
+  id: string;
+  operation: string;
+  type: FinanceEntryType;
+  amount: number;
+  status: 'Ativo' | 'Liquidado' | 'Analise';
+}
+
+interface ReceivableRow {
+  id: string;
+  contractRef: string;
+  producer: string;
+  amount: number;
+  dueDate: string;
+  status: ReceivableRowStatus;
+}
+
+interface PaymentRow {
+  id: string;
+  destination: string;
+  amount: number;
+  dueDate: string;
+  method: 'Asaas Split' | 'Escrow Release' | 'PIX';
+  status: PaymentRowStatus;
+}
+
+const KpiCard: React.FC<{ title: string; value: string; icon: React.FC<{ className?: string }>; color: string }> = ({
+  title,
+  value,
+  icon: Icon,
+  color,
+}) => (
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <div className={`flex items-center text-sm font-bold ${color}`}>
+      <Icon className="h-5 w-5 mr-2" />
+      {title}
     </div>
+    <p className="text-3xl font-bold text-slate-800 mt-2">{value}</p>
+  </div>
 );
 
-// New Component: Supply Chain Visualizer
-const SupplyChainVisualizer: React.FC = () => {
-    return (
-        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mb-6">
-            <h4 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center">
-                <LockClosedIcon className="h-4 w-4 mr-2 text-indigo-600" />
-                Sua Cadeia de Fornecimento (Lastro Auditado)
-            </h4>
-            <div className="flex items-center justify-between relative">
-                {/* Connecting Line */}
-                <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-300 -z-10 transform -translate-y-1/2"></div>
-                
-                {/* Nodes */}
-                <div className="flex flex-col items-center">
-                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold border-4 border-white shadow-sm">1</div>
-                    <span className="text-xs font-bold mt-2 text-slate-700">Cria</span>
-                    <span className="text-[10px] text-slate-500">Parceiro #492</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold border-4 border-white shadow-sm">2</div>
-                    <span className="text-xs font-bold mt-2 text-slate-700">Recria</span>
-                    <span className="text-[10px] text-slate-500 bg-indigo-100 px-1 rounded font-bold text-indigo-700">Integrado</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <div className="w-10 h-10 bg-slate-300 rounded-full flex items-center justify-center text-slate-500 font-bold border-4 border-white shadow-sm border-dashed border-slate-400">3</div>
-                    <span className="text-xs font-bold mt-2 text-slate-500">Engorda</span>
-                    <span className="text-[10px] text-amber-600 font-bold">Buscando...</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold border-4 border-white shadow-sm">4</div>
-                    <span className="text-xs font-bold mt-2 text-slate-800">Industria (Voce)</span>
-                </div>
-            </div>
-        </div>
-    );
+const getStatusTone = (value: string): 'available' | 'negotiating' | 'contracted' => {
+  const lower = value.toLowerCase();
+  if (lower.includes('contrat')) return 'contracted';
+  if (lower.includes('negoc')) return 'negotiating';
+  return 'available';
+};
+
+const dateOffset = (days: number): string => {
+  const base = new Date();
+  base.setDate(base.getDate() + days);
+  return base.toLocaleDateString('pt-BR');
 };
 
 const IntegratorDashboard: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'Network' | 'Demands' | 'Chat'>('Network');
-    const [messages, setMessages] = useState<IntegratorMessage[]>([]);
-    const [offers, setOffers] = useState<PartnershipOffer[]>([]);
-    const [producers, setProducers] = useState<IntegratedProducer[]>([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [targetStage, setTargetStage] = useState('Todos');
-    const [demandTitle, setDemandTitle] = useState('');
-    const [demandDescription, setDemandDescription] = useState('');
-    const [demandType, setDemandType] = useState<PartnershipOffer['type']>('Compra Garantida');
-    const [isLoading, setIsLoading] = useState(true);
-    const [loadError, setLoadError] = useState<string | null>(null);
+  const { currentUser } = useApp();
+  const [activeTab, setActiveTab] = useState<IntegratorTab>('PRODUCERS');
+  const [offers, setOffers] = useState<PartnershipOffer[]>([]);
+  const [producers, setProducers] = useState<IntegratedProducer[]>([]);
+  const [selectedProducerId, setSelectedProducerId] = useState<string | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [targetStage, setTargetStage] = useState('Todos');
+  const [producerFilter, setProducerFilter] = useState('');
+  const [demandTitle, setDemandTitle] = useState('');
+  const [demandDescription, setDemandDescription] = useState('');
+  const [demandType, setDemandType] = useState<PartnershipOffer['type']>('Compra Garantida');
+  const [apiLink, setApiLink] = useState<IntegratorApiLink | null>(null);
+  const [apiCompanyName, setApiCompanyName] = useState('');
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
+  const [apiClientId, setApiClientId] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [apiAuthMode, setApiAuthMode] = useState<IntegratorApiAuthMode>('API');
+  const [apiFeedback, setApiFeedback] = useState<string | null>(null);
+  const [isSavingApi, setIsSavingApi] = useState(false);
+  const [isUpdatingOffer, setIsUpdatingOffer] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-    useEffect(() => {
-        const loadIntegrator = async () => {
-            setIsLoading(true);
-            setLoadError(null);
-            try {
-                const [loadedMessages, loadedProducers, loadedOffers] = await Promise.all([
-                    integratorService.listMessages(),
-                    integratorService.listProducers(),
-                    integratorService.listOffers(),
-                ]);
-                setMessages(loadedMessages);
-                setProducers(loadedProducers);
-                setOffers(loadedOffers);
-            } catch {
-                setLoadError('Nao foi possivel carregar o portal de integracao.');
-            } finally {
-                setIsLoading(false);
-            }
-        };
+  useEffect(() => {
+    const loadIntegrator = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      setActionError(null);
+      try {
+        const [loadedProducers, loadedOffers, loadedApiLink] = await Promise.all([
+          integratorService.listProducers(),
+          integratorService.listOffers(),
+          currentUser?.uid ? integratorService.getApiLink(currentUser.uid) : Promise.resolve(null),
+        ]);
+        setProducers(loadedProducers);
+        setOffers(loadedOffers);
+        setApiLink(loadedApiLink);
 
-        void loadIntegrator();
-    }, []);
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-
-        try {
-            const msg = await integratorService.createMessage(newMessage.trim());
-            setMessages((prev) => [msg, ...prev]);
-            setNewMessage('');
-        } catch {
-            setLoadError('Nao foi possivel enviar a mensagem.');
+        if (loadedApiLink) {
+          setApiCompanyName(loadedApiLink.companyName);
+          setApiBaseUrl(loadedApiLink.baseUrl);
+          setApiClientId(loadedApiLink.clientId);
+          setApiAuthMode(loadedApiLink.authMode);
+        } else if (currentUser?.name) {
+          setApiCompanyName(currentUser.name);
         }
+      } catch {
+        setLoadError('Nao foi possivel carregar o portal de integracao.');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    const handleCreateDemand = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!demandTitle.trim() || !demandDescription.trim()) {
-            setLoadError('Informe titulo e descricao da demanda.');
-            return;
-        }
-        try {
-            const created = await integratorService.createDemand({
-                title: demandTitle.trim(),
-                description: demandDescription.trim(),
-                type: demandType,
-            });
-            setOffers((prev) => [created, ...prev]);
-            setDemandTitle('');
-            setDemandDescription('');
-            setDemandType('Compra Garantida');
-            setLoadError(null);
-        } catch {
-            setLoadError('Nao foi possivel criar a demanda de compra.');
-        }
-    };
+    void loadIntegrator();
+  }, [currentUser?.name, currentUser?.uid]);
 
-    const filteredProducers = targetStage === 'Todos' 
-        ? producers 
-        : producers.filter(p => p.productionType === targetStage);
-
-    const contractedCount = useMemo(() => producers.filter(p => p.status === 'Contratado').length, [producers]);
-    const openOffers = useMemo(() => offers.filter(o => o.status === 'Aberta').length, [offers]);
-
-    if (isLoading) {
-        return <LoadingSpinner text="Carregando integracao..." />;
+  const handleCreateDemand = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!demandTitle.trim() || !demandDescription.trim()) {
+      setActionError('Informe titulo e descricao da demanda.');
+      return;
     }
 
-    if (loadError) {
-        return <div className="p-6 bg-red-50 text-red-700 border border-red-200 rounded-lg">{loadError}</div>;
+    try {
+      const created = await integratorService.createDemand({
+        title: demandTitle.trim(),
+        description: demandDescription.trim(),
+        type: demandType,
+      });
+      setOffers((prev) => [created, ...prev]);
+      setDemandTitle('');
+      setDemandDescription('');
+      setDemandType('Compra Garantida');
+      setActionError(null);
+    } catch {
+      setActionError('Nao foi possivel criar a demanda de compra.');
+    }
+  };
+
+  const handleSaveApiLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!currentUser?.uid) {
+      setActionError('Sessao da Integradora nao encontrada para vincular API.');
+      return;
     }
 
-    return (
+    if (!apiCompanyName.trim() || !apiBaseUrl.trim() || !apiClientId.trim()) {
+      setApiFeedback('Informe razao social, URL base e client id para continuar.');
+      return;
+    }
+
+    if (apiAuthMode === 'API' && !apiKey.trim() && !apiLink?.apiKeyHint) {
+      setApiFeedback('Informe a chave de API para concluir a vinculacao.');
+      return;
+    }
+
+    try {
+      setIsSavingApi(true);
+      const saved = await integratorService.saveApiLink({
+        ownerId: currentUser.uid,
+        companyName: apiCompanyName,
+        baseUrl: apiBaseUrl,
+        clientId: apiClientId,
+        authMode: apiAuthMode,
+        apiKey: apiKey.trim() || undefined,
+      });
+      setApiLink(saved);
+      setApiKey('');
+      setApiFeedback(`Vinculacao API atualizada em ${saved.updatedAtLabel}.`);
+      setActionError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao salvar vinculacao API.';
+      setApiFeedback(message);
+    } finally {
+      setIsSavingApi(false);
+    }
+  };
+
+  const handleUpdateOfferStatus = async (offer: PartnershipOffer, status: PartnershipOffer['status']) => {
+    try {
+      setIsUpdatingOffer(true);
+      await integratorService.updateOfferStatus(offer.id, status);
+      setOffers((prev) => prev.map((item) => (item.id === offer.id ? { ...item, status } : item)));
+      setSelectedOfferId(offer.id);
+      setActionError(null);
+    } catch {
+      setActionError('Nao foi possivel atualizar o status da oferta.');
+    } finally {
+      setIsUpdatingOffer(false);
+    }
+  };
+
+  const filteredProducers = useMemo(() => {
+    const normalizedFilter = producerFilter.trim().toLowerCase();
+    return producers.filter((producer) => {
+      const byStage = targetStage === 'Todos' || producer.productionType === targetStage;
+      const byText =
+        normalizedFilter.length === 0 ||
+        producer.maskedName.toLowerCase().includes(normalizedFilter) ||
+        producer.region.toLowerCase().includes(normalizedFilter);
+      return byStage && byText;
+    });
+  }, [producerFilter, producers, targetStage]);
+
+  const contractedProducers = useMemo(
+    () => producers.filter((producer) => getStatusTone(producer.status) === 'contracted'),
+    [producers]
+  );
+
+  const openOffers = useMemo(() => offers.filter((offer) => offer.status === 'Aberta'), [offers]);
+
+  const contractSchedule = useMemo<ContractScheduleRow[]>(
+    () =>
+      contractedProducers.map((producer, index) => ({
+        id: `CTR-${producer.id}`,
+        producerName: producer.maskedName,
+        development: producer.productionType,
+        contractType: offers[index % Math.max(offers.length, 1)]?.type ?? 'Compra Garantida',
+        nextReportDate: dateOffset((index + 1) * 5),
+        estimatedVolume: producer.capacity,
+        status: index % 3 === 0 ? 'Aguardando Assinatura' : index % 4 === 0 ? 'Finalizado' : 'Em Execucao',
+      })),
+    [contractedProducers, offers]
+  );
+
+  const financeEntries = useMemo<FinanceEntry[]>(
+    () =>
+      contractSchedule.slice(0, 8).map((contract, index) => ({
+        id: `FIN-${contract.id}`,
+        operation: `${contract.contractType} - ${contract.producerName}`,
+        type: index % 2 === 0 ? 'Investimento' : 'Antecipacao',
+        amount: 45000 + index * 9200,
+        status: index % 3 === 0 ? 'Analise' : index % 4 === 0 ? 'Liquidado' : 'Ativo',
+      })),
+    [contractSchedule]
+  );
+
+  const receivables = useMemo<ReceivableRow[]>(
+    () =>
+      contractSchedule.slice(0, 10).map((contract, index) => ({
+        id: `REC-${contract.id}`,
+        contractRef: contract.id,
+        producer: contract.producerName,
+        amount: 18000 + index * 3500,
+        dueDate: dateOffset((index + 1) * 6),
+        status: index % 4 === 0 ? 'Liquidado' : index % 3 === 0 ? 'Em Escrow' : 'Pendente',
+      })),
+    [contractSchedule]
+  );
+
+  const payments = useMemo<PaymentRow[]>(
+    () =>
+      receivables.slice(0, 10).map((receivable, index) => ({
+        id: `PAY-${receivable.id}`,
+        destination: receivable.producer,
+        amount: Math.max(receivable.amount * 0.78, 0),
+        dueDate: dateOffset((index + 1) * 4),
+        method: index % 3 === 0 ? 'Escrow Release' : index % 2 === 0 ? 'Asaas Split' : 'PIX',
+        status: index % 4 === 0 ? 'Pago' : index % 3 === 0 ? 'Processando' : 'Agendado',
+      })),
+    [receivables]
+  );
+
+  const selectedProducer = useMemo(
+    () => producers.find((producer) => producer.id === selectedProducerId) ?? null,
+    [producers, selectedProducerId]
+  );
+
+  const selectedOffer = useMemo(
+    () => offers.find((offer) => offer.id === selectedOfferId) ?? null,
+    [offers, selectedOfferId]
+  );
+
+  const totalFinanceExposure = useMemo(
+    () => financeEntries.filter((entry) => entry.status !== 'Liquidado').reduce((sum, entry) => sum + entry.amount, 0),
+    [financeEntries]
+  );
+
+  const pendingReceivables = useMemo(
+    () => receivables.filter((receivable) => receivable.status !== 'Liquidado').reduce((sum, receivable) => sum + receivable.amount, 0),
+    [receivables]
+  );
+
+  const scheduledPayments = useMemo(
+    () => payments.filter((payment) => payment.status !== 'Pago').reduce((sum, payment) => sum + payment.amount, 0),
+    [payments]
+  );
+
+  if (isLoading) {
+    return <LoadingSpinner text="Carregando integracao..." />;
+  }
+
+  if (loadError) {
+    return <div className="p-6 bg-red-50 text-red-700 border border-red-200 rounded-lg">{loadError}</div>;
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
         <div>
-            <div className="flex justify-between items-start mb-6">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 mb-2">Portal de Integracao (Originacao)</h2>
-                    <p className="text-slate-600">Gerencie sua cadeia de suprimentos e contratos de compra futura.</p>
-                </div>
-                <div className="bg-indigo-900 text-white px-4 py-2 rounded-lg text-sm flex items-center shadow-lg">
-                    <ShieldCheckIcon className="h-5 w-5 mr-2 text-emerald-400" />
-                    <span>Ciclo+ Safe Deal Ativo</span>
-                </div>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <KpiCard title="Fornecedores Integrados" value={contractedCount.toString()} icon={UsersIcon} color="text-indigo-600" />
-                <KpiCard title="Volume Contratado" value="1.500 cab" icon={BriefcaseIcon} color="text-emerald-600" />
-                <KpiCard title="Demandas de Compra" value={openOffers.toString()} icon={CashIcon} color="text-amber-600" />
-            </div>
-
-            {/* Main Content Area with Tabs */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden min-h-[500px]">
-                {/* Tabs Header */}
-                <div className="flex border-b border-slate-200">
-                    <button 
-                        onClick={() => setActiveTab('Network')}
-                        className={`flex-1 py-4 text-sm font-bold text-center transition-colors ${activeTab === 'Network' ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        Rede de Fornecimento
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('Demands')}
-                        className={`flex-1 py-4 text-sm font-bold text-center transition-colors ${activeTab === 'Demands' ? 'bg-amber-50 text-amber-700 border-b-2 border-amber-500' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        Minhas Demandas (Compras)
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('Chat')}
-                        className={`flex-1 py-4 text-sm font-bold text-center transition-colors ${activeTab === 'Chat' ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-500' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        Negociacao Segura
-                    </button>
-                </div>
-
-                {/* Tab Content */}
-                <div className="p-6">
-                    {/* NETWORK TAB */}
-                    {activeTab === 'Network' && (
-                        <div>
-                            <SupplyChainVisualizer />
-
-                            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                                <h3 className="text-xl font-bold text-slate-800">Parceiros de Originacao</h3>
-                                <div className="flex gap-2">
-                                    <select 
-                                        value={targetStage}
-                                        onChange={(e) => setTargetStage(e.target.value)}
-                                        className="p-2 border border-slate-300 rounded-md text-sm bg-slate-50"
-                                    >
-                                        <option value="Todos">Todas as Fases</option>
-                                        <option value="Cria">Fase de Cria</option>
-                                        <option value="Recria">Fase de Recria</option>
-                                        <option value="Engorda">Fase de Engorda</option>
-                                    </select>
-                                    <input type="text" placeholder="Filtrar por regiao..." className="p-2 border border-slate-300 rounded-md text-sm w-64" />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {filteredProducers.map(producer => (
-                                    <div key={producer.id} className="border border-slate-200 rounded-xl p-5 hover:shadow-lg transition-all bg-white relative overflow-hidden group">
-                                        {/* Status Strip */}
-                                        <div className={`absolute top-0 left-0 w-1 h-full ${producer.status === 'Disponível' ? 'bg-emerald-500' : producer.status === 'Contratado' ? 'bg-slate-400' : 'bg-amber-500'}`}></div>
-                                        
-                                        <div className="ml-3">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1 block">Perfil Verificado (Blind)</span>
-                                                    <h4 className="text-lg font-bold text-slate-800">{producer.maskedName}</h4>
-                                                </div>
-                                                <div className="text-center">
-                                                    <div className="w-10 h-10 rounded-full border-2 border-emerald-500 flex items-center justify-center text-emerald-700 font-bold text-sm bg-emerald-50">
-                                                        {producer.auditScore}
-                                                    </div>
-                                                    <span className="text-[9px] text-emerald-600 font-bold uppercase mt-1 block">Score</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2 text-sm text-slate-600 mb-4">
-                                                <p className="flex items-center"><BriefcaseIcon className="h-4 w-4 mr-2 text-slate-400"/> Foco: <span className="font-bold ml-1">{producer.productionType}</span></p>
-                                                <p className="flex items-center">
-                                                    <MapIcon className="h-4 w-4 mr-2 text-slate-400"/> 
-                                                    <span className="ml-1 bg-slate-100 px-2 py-0.5 rounded text-xs text-slate-500 flex items-center">
-                                                        <LockClosedIcon className="h-3 w-3 mr-1 text-slate-400"/>
-                                                        {producer.region}
-                                                    </span>
-                                                </p>
-                                                <p className="flex items-center"><CubeIcon className="h-4 w-4 mr-2 text-slate-400"/> Capacidade: <span className="font-bold ml-1 text-indigo-700">{producer.capacity}</span></p>
-                                            </div>
-
-                                            <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                                                <div className="flex items-center text-xs text-slate-400">
-                                                    <CheckCircleIcon className="h-3 w-3 mr-1 text-emerald-500" />
-                                                    Auditado: {producer.lastAuditDate}
-                                                </div>
-                                                <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm">
-                                                    Propor Compra
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <div className="mt-8 bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start">
-                                <LockClosedIcon className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />
-                                <div>
-                                    <h5 className="font-bold text-blue-800 text-sm">Privacidade de Rede Garantida</h5>
-                                    <p className="text-xs text-blue-700 mt-1">
-                                        A localizacao exata das fazendas parceiras e omitida ate a assinatura do contrato digital (Escrow). 
-                                        O sistema atua como gestor fiel do compromisso para garantir o cumprimento do lastro e evitar quebra da cadeia (bypass).
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* DEMANDS TAB */}
-                    {activeTab === 'Demands' && (
-                        <div>
-                            <div className="mb-6">
-                                <h3 className="text-xl font-bold text-slate-800 mb-4">Minhas Demandas de Compra</h3>
-                                <form onSubmit={handleCreateDemand} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                    <input
-                                        value={demandTitle}
-                                        onChange={(e) => setDemandTitle(e.target.value)}
-                                        placeholder="Titulo da demanda"
-                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm"
-                                    />
-                                    <input
-                                        value={demandDescription}
-                                        onChange={(e) => setDemandDescription(e.target.value)}
-                                        placeholder="Descricao"
-                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm"
-                                    />
-                                    <select
-                                        value={demandType}
-                                        onChange={(e) => setDemandType(e.target.value as PartnershipOffer['type'])}
-                                        className="md:col-span-1 p-2 border border-slate-300 rounded-md text-sm bg-white"
-                                    >
-                                        <option value="Compra Garantida">Compra Garantida</option>
-                                        <option value="Fomento (Insumos)">Fomento (Insumos)</option>
-                                        <option value="Integração Vertical">Integracao Vertical</option>
-                                        <option value="Parceria Estratégica">Parceria Estrategica</option>
-                                    </select>
-                                    <button type="submit" className="flex items-center justify-center px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-semibold text-sm">
-                                        <PlusCircleIcon className="h-4 w-4 mr-2" />
-                                        Criar Nova Demanda
-                                    </button>
-                                </form>
-                            </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {offers.map(offer => (
-                                    <div key={offer.id} className="border border-slate-200 rounded-lg p-5 hover:shadow-md transition-shadow relative">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h4 className="font-bold text-lg text-slate-800">{offer.title}</h4>
-                                            <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase ${offer.status === 'Aberta' ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
-                                                {offer.status}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-slate-600 mb-4">{offer.description}</p>
-                                        <div className="flex justify-between items-center text-xs text-slate-500 bg-slate-50 p-2 rounded">
-                                            <span className="font-semibold">Modelo: {offer.type}</span>
-                                            <span className="text-indigo-600 font-bold">{offer.applicants} Candidatos (Triagem Automatica)</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* CHAT TAB */}
-                    {activeTab === 'Chat' && (
-                        <div className="flex flex-col h-[500px]">
-                            <div className="bg-slate-100 p-3 rounded-t-lg border-b border-slate-200 flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-500 uppercase">Canal Seguro do Sistema</span>
-                                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">Criptografado</span>
-                            </div>
-                            <div className="flex-1 overflow-y-auto space-y-4 pr-2 mb-4 p-4">
-                                {messages.map(msg => (
-                                    <div key={msg.id} className={`flex flex-col ${msg.from === 'Integradora' ? 'items-end' : 'items-start'}`}>
-                                        <div className={`max-w-[70%] rounded-lg p-4 shadow-sm ${
-                                            msg.from === 'Integradora' 
-                                            ? 'bg-indigo-600 text-white rounded-br-none' 
-                                            : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
-                                        }`}>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className={`text-xs font-bold ${msg.from === 'Integradora' ? 'text-indigo-200' : 'text-slate-500'}`}>{msg.from}</span>
-                                                <span className={`text-xs ml-2 ${msg.from === 'Integradora' ? 'text-indigo-300' : 'text-slate-400'}`}>{msg.date}</span>
-                                            </div>
-                                            <p className="text-sm">{msg.content}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="bg-white p-4 rounded-b-lg border-t border-slate-200">
-                                <form onSubmit={handleSendMessage} className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
-                                        placeholder="Enviar mensagem para a rede..." 
-                                        className="flex-1 p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-md hover:bg-indigo-700 transition-colors">
-                                        Enviar
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+          <h2 className="text-3xl font-bold text-slate-800 mb-2">Portal da Integradora</h2>
+          <p className="text-slate-600">Gestao central de produtores, demandas, contratos, financeiro, recebiveis e pagamentos.</p>
         </div>
-    );
+        <div className="bg-indigo-900 text-white px-4 py-2 rounded-lg text-sm flex items-center shadow-lg">
+          <ShieldCheckIcon className="h-5 w-5 mr-2 text-emerald-400" />
+          <span>{apiLink?.status === 'ATIVA' ? 'API vinculada e operacao auditada ativa' : 'Integracao via API e operacao auditada ativa'}</span>
+        </div>
+      </div>
+      {actionError && (
+        <div className="mb-6 p-3 rounded-md border border-red-200 bg-red-50 text-red-700 text-sm">
+          {actionError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <KpiCard title="Produtores Contratados" value={contractedProducers.length.toString()} icon={UsersIcon} color="text-indigo-600" />
+        <KpiCard title="Recebiveis em Aberto" value={formatCurrency(pendingReceivables)} icon={CashIcon} color="text-amber-600" />
+        <KpiCard title="Pagamentos Programados" value={formatCurrency(scheduledPayments)} icon={BriefcaseIcon} color="text-emerald-600" />
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-bold text-slate-800">Vinculacao API da Industria</h3>
+          <span className={`text-xs font-semibold px-2 py-1 rounded ${apiLink?.status === 'ATIVA' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {apiLink?.status ?? 'PENDENTE'}
+          </span>
+        </div>
+        <form onSubmit={handleSaveApiLink} className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          <input value={apiCompanyName} onChange={(e) => setApiCompanyName(e.target.value)} placeholder="Razao social" className="md:col-span-1 p-2 border border-slate-300 rounded text-sm" />
+          <input value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} placeholder="URL base API" className="md:col-span-1 p-2 border border-slate-300 rounded text-sm" />
+          <input value={apiClientId} onChange={(e) => setApiClientId(e.target.value)} placeholder="Client ID" className="md:col-span-1 p-2 border border-slate-300 rounded text-sm" />
+          <select value={apiAuthMode} onChange={(e) => setApiAuthMode(e.target.value as IntegratorApiAuthMode)} className="md:col-span-1 p-2 border border-slate-300 rounded text-sm bg-white">
+            <option value="API">Modo API</option>
+            <option value="LOGIN">Modo Login</option>
+          </select>
+          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={apiLink?.apiKeyHint ? `Chave atual ****${apiLink.apiKeyHint}` : 'API key'} className="md:col-span-1 p-2 border border-slate-300 rounded text-sm" />
+          <button type="submit" disabled={isSavingApi} className="md:col-span-5 px-3 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60">
+            {isSavingApi ? 'Vinculando...' : 'Salvar e validar vinculacao API'}
+          </button>
+        </form>
+        {apiFeedback && <p className="mt-2 text-xs text-indigo-700">{apiFeedback}</p>}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md overflow-hidden min-h-[540px]">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 border-b border-slate-200">
+          {[
+            { key: 'PRODUCERS', label: 'Produtores' },
+            { key: 'DEMANDS', label: 'Cadastrar Demanda' },
+            { key: 'OFFERS', label: 'Ofertas Recebidas' },
+            { key: 'CONTRACT_SCHEDULE', label: 'Escala Contratos' },
+            { key: 'FINANCE', label: 'Financeiro' },
+            { key: 'RECEIVABLES', label: 'Recebiveis' },
+            { key: 'PAYMENTS', label: 'Pagamentos' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as IntegratorTab)}
+              className={`py-3 text-xs font-bold transition-colors ${activeTab === tab.key ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'PRODUCERS' && (
+            <div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 flex flex-col lg:flex-row lg:items-center gap-3">
+                <h3 className="font-bold text-slate-800 lg:mr-auto">Visualizacao de Produtores e Desenvolvimento Contratual</h3>
+                <select value={targetStage} onChange={(e) => setTargetStage(e.target.value)} className="p-2 border border-slate-300 rounded-md text-sm bg-white">
+                  <option value="Todos">Todas as fases</option>
+                  <option value="Cria">Cria</option>
+                  <option value="Recria">Recria</option>
+                  <option value="Engorda">Engorda</option>
+                  <option value="Ciclo Completo">Ciclo Completo</option>
+                  <option value="Agricultura">Agricultura</option>
+                </select>
+                <input value={producerFilter} onChange={(e) => setProducerFilter(e.target.value)} placeholder="Filtrar produtor ou regiao" className="p-2 border border-slate-300 rounded-md text-sm w-full lg:w-72" />
+              </div>
+
+              {filteredProducers.length === 0 ? (
+                <div className="p-6 border border-dashed border-slate-300 rounded-lg text-sm text-slate-600">Nenhum produtor encontrado com os filtros selecionados.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {filteredProducers.map((producer) => {
+                    const tone = getStatusTone(producer.status);
+                    const statusColor = tone === 'contracted' ? 'bg-emerald-100 text-emerald-700' : tone === 'negotiating' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700';
+                    return (
+                      <div key={producer.id} className="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase">Perfil Auditado</span>
+                            <h4 className="text-lg font-bold text-slate-800 mt-1">{producer.maskedName}</h4>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor}`}>{producer.status}</span>
+                        </div>
+                        <div className="space-y-2 text-sm text-slate-600">
+                          <p className="flex items-center"><BriefcaseIcon className="h-4 w-4 mr-2 text-slate-400" />Desenvolvimento: <span className="ml-1 font-semibold">{producer.productionType}</span></p>
+                          <p className="flex items-center"><MapIcon className="h-4 w-4 mr-2 text-slate-400" />{producer.region}</p>
+                          <p className="flex items-center"><CubeIcon className="h-4 w-4 mr-2 text-slate-400" />Capacidade: <span className="ml-1 font-semibold">{producer.capacity}</span></p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+                          <div className="flex items-center text-xs text-slate-500"><CheckCircleIcon className="h-3 w-3 mr-1 text-emerald-500" />Score {producer.auditScore}</div>
+                          <button onClick={() => setSelectedProducerId(producer.id)} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-bold hover:bg-indigo-700 transition-colors">Detalhar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {selectedProducer && (
+                <div className="mt-6 bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="md:mr-auto">
+                      <h4 className="text-lg font-bold text-indigo-900">{selectedProducer.maskedName}</h4>
+                      <p className="text-sm text-indigo-700">Contrato em desenvolvimento com foco em {selectedProducer.productionType} e clausulas de entrega auditada.</p>
+                    </div>
+                    <button onClick={() => setActiveTab('CONTRACT_SCHEDULE')} className="px-4 py-2 bg-indigo-700 text-white rounded-md text-sm font-semibold hover:bg-indigo-800 transition-colors">Abrir contrato</button>
+                    <button onClick={() => setActiveTab('OFFERS')} className="px-4 py-2 bg-white text-indigo-700 border border-indigo-200 rounded-md text-sm font-semibold hover:bg-indigo-100 transition-colors">Ver historico</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'DEMANDS' && (
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 mb-4">Cadastro de Demanda da Industria</h3>
+              <form onSubmit={handleCreateDemand} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 mb-6">
+                <input value={demandTitle} onChange={(e) => setDemandTitle(e.target.value)} placeholder="Titulo da demanda" className="p-2 border border-slate-300 rounded-md text-sm" />
+                <input value={demandDescription} onChange={(e) => setDemandDescription(e.target.value)} placeholder="Descricao tecnica e prazo" className="p-2 border border-slate-300 rounded-md text-sm" />
+                <select value={demandType} onChange={(e) => setDemandType(e.target.value as PartnershipOffer['type'])} className="p-2 border border-slate-300 rounded-md text-sm bg-white">
+                  <option value="Compra Garantida">Compra Garantida</option>
+                  <option value="Fomento (Insumos)">Fomento (Insumos)</option>
+                  <option value="Integracao Vertical">Integracao Vertical</option>
+                  <option value="Parceria Estrategica">Parceria Estrategica</option>
+                </select>
+                <button type="submit" className="flex items-center justify-center px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-semibold text-sm">
+                  <PlusCircleIcon className="h-4 w-4 mr-2" />Cadastrar demanda
+                </button>
+              </form>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {offers.map((offer) => (
+                  <div key={offer.id} className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <h4 className="font-bold text-slate-800">{offer.title}</h4>
+                        <p className="text-sm text-slate-600 mt-1">{offer.description}</p>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-bold rounded ${offer.status === 'Aberta' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{offer.status}</span>
+                    </div>
+                    <div className="text-xs mt-3 text-slate-500 flex justify-between"><span>Modelo: {offer.type}</span><span>{offer.applicants} candidatos</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'OFFERS' && (
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 mb-4">Ofertas Recebidas</h3>
+              <p className="text-sm text-slate-600 mb-4">Consolidado de retorno dos produtores para demandas em aberto com trilha de auditoria e priorizacao.</p>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600"><tr><th className="text-left p-3">Demanda</th><th className="text-left p-3">Tipo</th><th className="text-left p-3">Candidatos</th><th className="text-left p-3">Status</th><th className="text-left p-3">Acao</th></tr></thead>
+                  <tbody>
+                    {offers.map((offer) => (
+                      <tr key={offer.id} className="border-t border-slate-100">
+                        <td className="p-3 font-semibold text-slate-700">{offer.title}</td>
+                        <td className="p-3">{offer.type}</td>
+                        <td className="p-3">{offer.applicants}</td>
+                        <td className="p-3">{offer.status}</td>
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => setSelectedOfferId(offer.id)} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors">Detalhar</button>
+                            <button onClick={() => void handleUpdateOfferStatus(offer, offer.status === 'Aberta' ? 'Encerrada' : 'Aberta')} disabled={isUpdatingOffer} className="px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800 transition-colors disabled:opacity-60">{offer.status === 'Aberta' ? 'Encerrar' : 'Reabrir'}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {selectedOffer && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                  <h4 className="font-bold text-blue-900">Detalhe da Oferta {selectedOffer.id}</h4>
+                  <p className="text-sm text-blue-800 mt-1">{selectedOffer.title}</p>
+                  <p className="text-sm text-blue-700 mt-1">{selectedOffer.description}</p>
+                  <div className="text-xs text-blue-700 mt-2 flex gap-3"><span>Modelo: {selectedOffer.type}</span><span>Candidatos: {selectedOffer.applicants}</span><span>Status: {selectedOffer.status}</span></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'CONTRACT_SCHEDULE' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800">Escala de Contratos</h3>
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-indigo-100 text-indigo-700">
+                  {contractSchedule.length} contratos mapeados
+                </span>
+              </div>
+              <p className="text-sm text-slate-600 mb-4">
+                Planejamento de execucao por produtor, com proximas entregas e acompanhamento de status contratual.
+              </p>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left p-3">Contrato</th>
+                      <th className="text-left p-3">Produtor</th>
+                      <th className="text-left p-3">Desenvolvimento</th>
+                      <th className="text-left p-3">Proximo Relatorio</th>
+                      <th className="text-left p-3">Volume</th>
+                      <th className="text-left p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contractSchedule.map((contract) => (
+                      <tr key={contract.id} className="border-t border-slate-100">
+                        <td className="p-3 font-semibold text-slate-700">{contract.id}</td>
+                        <td className="p-3">{contract.producerName}</td>
+                        <td className="p-3">{contract.development}</td>
+                        <td className="p-3">{contract.nextReportDate}</td>
+                        <td className="p-3">{contract.estimatedVolume}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded ${
+                              contract.status === 'Em Execucao'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : contract.status === 'Aguardando Assinatura'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {contract.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'FINANCE' && (
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                  <div className="flex items-center text-indigo-700 text-sm font-semibold">
+                    <TrendingUpIcon className="h-4 w-4 mr-2" />
+                    Exposicao em Aberto
+                  </div>
+                  <p className="text-2xl font-bold text-indigo-900 mt-2">{formatCurrency(totalFinanceExposure)}</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
+                  <div className="text-amber-700 text-sm font-semibold">Ofertas em aberto</div>
+                  <p className="text-2xl font-bold text-amber-900 mt-2">{openOffers.length}</p>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4">
+                  <div className="text-emerald-700 text-sm font-semibold">Pagamentos planejados</div>
+                  <p className="text-2xl font-bold text-emerald-900 mt-2">{formatCurrency(scheduledPayments)}</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left p-3">Operacao</th>
+                      <th className="text-left p-3">Tipo</th>
+                      <th className="text-left p-3">Valor</th>
+                      <th className="text-left p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {financeEntries.map((entry) => (
+                      <tr key={entry.id} className="border-t border-slate-100">
+                        <td className="p-3 font-semibold text-slate-700">{entry.operation}</td>
+                        <td className="p-3">{entry.type}</td>
+                        <td className="p-3">{formatCurrency(entry.amount)}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded ${
+                              entry.status === 'Ativo'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : entry.status === 'Analise'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {entry.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'RECEIVABLES' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800">Recebiveis</h3>
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-700">
+                  Em aberto: {formatCurrency(pendingReceivables)}
+                </span>
+              </div>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left p-3">Referencia</th>
+                      <th className="text-left p-3">Produtor</th>
+                      <th className="text-left p-3">Vencimento</th>
+                      <th className="text-left p-3">Valor</th>
+                      <th className="text-left p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receivables.map((receivable) => (
+                      <tr key={receivable.id} className="border-t border-slate-100">
+                        <td className="p-3 font-semibold text-slate-700">{receivable.contractRef}</td>
+                        <td className="p-3">{receivable.producer}</td>
+                        <td className="p-3">{receivable.dueDate}</td>
+                        <td className="p-3">{formatCurrency(receivable.amount)}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded ${
+                              receivable.status === 'Pendente'
+                                ? 'bg-amber-100 text-amber-700'
+                                : receivable.status === 'Em Escrow'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {receivable.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'PAYMENTS' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800">Pagamentos</h3>
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-emerald-100 text-emerald-700">
+                  Programado: {formatCurrency(scheduledPayments)}
+                </span>
+              </div>
+              <div className="p-3 mb-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center">
+                <LockClosedIcon className="h-4 w-4 mr-2 text-slate-500" />
+                Fluxo protegido com conciliacao entre split financeiro, escrow e trilha de auditoria.
+              </div>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left p-3">Destino</th>
+                      <th className="text-left p-3">Metodo</th>
+                      <th className="text-left p-3">Vencimento</th>
+                      <th className="text-left p-3">Valor</th>
+                      <th className="text-left p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((payment) => (
+                      <tr key={payment.id} className="border-t border-slate-100">
+                        <td className="p-3 font-semibold text-slate-700">{payment.destination}</td>
+                        <td className="p-3">{payment.method}</td>
+                        <td className="p-3">{payment.dueDate}</td>
+                        <td className="p-3">{formatCurrency(payment.amount)}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded ${
+                              payment.status === 'Agendado'
+                                ? 'bg-amber-100 text-amber-700'
+                                : payment.status === 'Processando'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {payment.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default IntegratorDashboard;

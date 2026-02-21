@@ -17,6 +17,8 @@ const toInventoryItem = (id: string, raw: Record<string, unknown>): InventoryIte
   unit: String(raw.unit ?? ''),
   minLevel: Number(raw.minLevel ?? 0),
   location: String(raw.location ?? ''),
+  unitCost: raw.unitCost !== undefined && raw.unitCost !== null ? Number(raw.unitCost) : undefined,
+  assetTag: raw.assetTag ? String(raw.assetTag) : undefined,
   lastUpdated: String(raw.lastUpdated ?? todayBR()),
 });
 
@@ -63,6 +65,29 @@ export const stockService = {
     return snapshot.docs
       .map((docSnapshot: any) => toInventoryItem(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: InventoryItem, b: InventoryItem) => a.name.localeCompare(b.name));
+  },
+
+  async createInventoryItem(payload: Omit<InventoryItem, 'id' | 'lastUpdated'>): Promise<InventoryItem> {
+    const newItem: InventoryItem = {
+      id: `INV-${Date.now()}`,
+      name: payload.name,
+      category: payload.category,
+      quantity: payload.quantity,
+      unit: payload.unit,
+      minLevel: payload.minLevel,
+      location: payload.location,
+      unitCost: payload.unitCost,
+      assetTag: payload.assetTag,
+      lastUpdated: todayBR(),
+    };
+
+    await setDoc(doc(db, 'inventoryItems', newItem.id), {
+      ...newItem,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return newItem;
   },
 
   async listMovements(): Promise<StockMovement[]> {
@@ -220,8 +245,57 @@ export const stockService = {
     );
   },
 
+  async registerInboundPurchase(payload: {
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    requester: string;
+    invoiceNumber?: string;
+    reason?: string;
+  }): Promise<StockMovement> {
+    const movement: StockMovement = {
+      id: `MOV-${Date.now()}`,
+      itemId: payload.itemId,
+      itemName: payload.itemName,
+      type: 'INBOUND_PURCHASE',
+      quantity: payload.quantity,
+      unit: payload.unit,
+      date: todayBR(),
+      status: payload.invoiceNumber ? 'COMPLETED' : 'INVOICE_REQUIRED',
+      requester: payload.requester,
+      invoiceNumber: payload.invoiceNumber,
+      reason: payload.reason,
+    };
+
+    const movementRef = doc(db, 'stockMovements', movement.id);
+    const itemRef = doc(db, 'inventoryItems', payload.itemId);
+
+    await runTransaction(db, async (transaction: any) => {
+      transaction.set(movementRef, {
+        ...movement,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      if (payload.invoiceNumber) {
+        const itemSnapshot = await transaction.get(itemRef);
+        if (!itemSnapshot.exists()) {
+          throw new Error('Item de estoque nao encontrado para entrada.');
+        }
+        const itemData = toInventoryItem(itemSnapshot.id, itemSnapshot.data() as Record<string, unknown>);
+        transaction.update(itemRef, {
+          quantity: itemData.quantity + payload.quantity,
+          lastUpdated: todayBR(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+
+    return movement;
+  },
+
   async updateMovementStatus(movementId: string, status: StockMovement['status']): Promise<void> {
     await updateDoc(doc(db, 'stockMovements', movementId), { status, updatedAt: serverTimestamp() });
   },
 };
-

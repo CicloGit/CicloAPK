@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import LoginView from './components/views/LoginView';
@@ -114,19 +114,82 @@ const AuthorizationGuard = () => {
   return <Outlet />;
 };
 
-const MainLayout = () => (
-  <div className="flex h-screen bg-slate-100 font-sans">
-    <Sidebar />
-    <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-      <OfflineBanner />
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingFallback />}>
-          <Outlet />
-        </Suspense>
-      </ErrorBoundary>
-    </main>
-  </div>
-);
+const supportsHoverPointer = (): boolean => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+};
+
+const MainLayout = () => {
+  const [isAutoHideSidebar, setAutoHideSidebar] = useState(supportsHoverPointer);
+  const [isSidebarVisible, setSidebarVisible] = useState(() => !supportsHoverPointer());
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+    const syncSidebarMode = (matches: boolean) => {
+      setAutoHideSidebar(matches);
+      setSidebarVisible(!matches);
+    };
+
+    syncSidebarMode(mediaQuery.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      syncSidebarMode(event.matches);
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  const showSidebar = () => {
+    if (isAutoHideSidebar) {
+      setSidebarVisible(true);
+    }
+  };
+
+  const hideSidebar = () => {
+    if (isAutoHideSidebar) {
+      setSidebarVisible(false);
+    }
+  };
+
+  return (
+    <div className="relative flex h-screen bg-slate-100 font-sans">
+      {isAutoHideSidebar && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 z-40 w-3"
+          onMouseEnter={showSidebar}
+        />
+      )}
+      <div
+        className={`h-full overflow-hidden transition-[width] duration-200 ease-out ${
+          isSidebarVisible ? 'w-64' : 'w-0'
+        }`}
+        onMouseEnter={showSidebar}
+        onMouseLeave={hideSidebar}
+      >
+        <Sidebar />
+      </div>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8" onMouseEnter={hideSidebar}>
+        <OfflineBanner />
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingFallback />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
+      </main>
+    </div>
+  );
+};
 
 const FullscreenLayout = ({ children }: { children: React.ReactNode }) => (
   <main className="h-screen overflow-y-auto">

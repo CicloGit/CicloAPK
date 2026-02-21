@@ -90,4 +90,24 @@ export const storageService = {
     const url = await getDownloadURL(objectRef);
     return { url, storagePath, hash };
   },
+
+  async uploadContractOriginal(file: File, tenantId: string, contractId: string): Promise<{ url: string; storagePath: string; hash: string }> {
+    const fileName = `${Date.now()}_${sanitizeFileName(file.name)}`;
+    const storagePath = `evidences/${tenantId}/contract-${sanitizeFileName(contractId)}/original/${fileName}`;
+    const objectRef = ref(storage, storagePath);
+    const hash = await sha256File(file);
+
+    await uploadBytes(objectRef, file, {
+      contentType: file.type || 'application/octet-stream',
+      customMetadata: {
+        sha256: hash,
+        tenantId,
+        contractId,
+        kind: 'contract-original',
+      },
+    });
+
+    const url = await getDownloadURL(objectRef);
+    return { url, storagePath, hash };
+  },
 };

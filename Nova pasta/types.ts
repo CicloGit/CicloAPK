@@ -288,6 +288,12 @@ export interface Contract {
     deadline: string;
     status: ContractStatus;
     deliveryHistory: Delivery[];
+    counterparty?: string;
+    signedAt?: string;
+    originalFileUrl?: string;
+    originalFileName?: string;
+    originalFileHash?: string;
+    notes?: string;
 }
 
 export interface AnimalProductionDetails {
@@ -359,6 +365,13 @@ export interface SalesOffer {
     quantity: string;
     price: number;
     channel?: ConsumerMarketChannel;
+    listingCategory?: ListingCategory;
+    listingMode?: ListingMode;
+    offerType?: 'PRODUTO' | 'ANIMAL' | 'UTENSILIO';
+    description?: string;
+    location?: string;
+    auctionEndAt?: string;
+    minimumBid?: number;
     status: SalesOfferStatus;
     date: string;
 }
@@ -391,11 +404,13 @@ export interface Expense {
 export interface InventoryItem {
     id: string;
     name: string;
-    category: 'Insumo' | 'Medicamento' | 'Ferramenta' | 'Outro';
+    category: 'Insumo' | 'Medicamento' | 'Ferramenta' | 'Consumivel' | 'Bem Patrimonial' | 'Outro';
     quantity: number;
     unit: string;
     minLevel: number;
     location: string;
+    unitCost?: number;
+    assetTag?: string;
     lastUpdated: string;
 }
 
@@ -683,6 +698,8 @@ export interface OperatorTask {
     proofType: 'PHOTO' | 'GPS' | 'AUDIO';
     details: string;
     geolocation: string;
+    proofUrl?: string;
+    proofMimeType?: string;
 }
 
 export type StockMovementType = 'INBOUND_PURCHASE' | 'OUTBOUND_USAGE' | 'OUTBOUND_LOSS';
@@ -787,6 +804,11 @@ export interface ProducerExpense {
     date: string;
     source: 'OPERADOR' | 'ADMINISTRADOR' | 'SISTEMA';
     relatedActivityId?: string;
+    relatedPastureId?: string;
+    areaHa?: number;
+    expectedRevenue?: number;
+    realizedRevenue?: number;
+    profit?: number;
 }
 
 export interface ProducerOperationalActivity {
@@ -849,5 +871,4 @@ export interface SeedLot {
   purity: number; // percentage
   storageLocation: string;
 }
-
 

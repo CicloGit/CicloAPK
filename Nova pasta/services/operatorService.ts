@@ -24,6 +24,8 @@ const toOperatorTask = (id: string, raw: Record<string, unknown>): OperatorTask 
   proofType: (raw.proofType as OperatorTask['proofType']) ?? 'PHOTO',
   details: String(raw.details ?? ''),
   geolocation: String(raw.geolocation ?? ''),
+  proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
+  proofMimeType: raw.proofMimeType ? String(raw.proofMimeType) : undefined,
 });
 export const operatorService = {
   async listTasks(): Promise<OperatorTask[]> {
@@ -73,4 +75,3 @@ export const operatorService = {
     });
   },
 };
-
