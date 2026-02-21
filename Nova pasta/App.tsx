@@ -259,7 +259,7 @@ const MainLayout = () => {
       )}
 
       <main
-        className={`min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 ${isMobileViewport ? 'pt-20' : ''}`}
+        className={`min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 ${isMobileViewport ? 'pt-20' : ''}`}
         onMouseEnter={hideSidebar}
       >
         {shouldRenderSidebar && isMobileViewport && (
@@ -286,7 +286,7 @@ const MainLayout = () => {
 };
 
 const FullscreenLayout = ({ children }: { children: React.ReactNode }) => (
-  <main className="h-screen overflow-y-auto app-shell-background">
+  <main className="h-screen overflow-x-hidden overflow-y-auto app-shell-background">
     <ErrorBoundary>
       <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
     </ErrorBoundary>

@@ -21,6 +21,11 @@
     height: 100%;
   }
 
+  html {
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -34,8 +39,14 @@
       radial-gradient(circle at 94% 12%, #e7f0ff 0, rgba(231, 240, 255, 0.44) 18%, transparent 46%),
       linear-gradient(165deg, var(--app-bg) 0%, var(--app-bg-soft) 100%);
     font-family: 'Plus Jakarta Sans', 'Avenir Next', 'Segoe UI', sans-serif;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  #root {
+    overflow-x: clip;
   }
 
   code,
@@ -47,6 +58,50 @@
   ::selection {
     color: #0b1020;
     background: rgba(20, 184, 166, 0.22);
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    max-width: 100%;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, p, li, figcaption, small, blockquote, dt, dd, td, th, label, a, span) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  :where(pre, code) {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  :where(.flex, .grid, .inline-flex) > * {
+    min-width: 0;
+  }
+
+  :where(table) {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  :where(th, td) {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 
@@ -96,6 +151,16 @@
     background-color: #94a3b8;
     border-radius: 999px;
     border: 2px solid #e2e8f0;
+  }
+
+  .text-safe-wrap {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .safe-content-box {
+    min-width: 0;
+    min-height: 0;
   }
 }
 
