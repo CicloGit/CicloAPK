@@ -20,6 +20,37 @@ export interface BackendAIResult {
   recommendation: string;
   action: 'TREAT' | 'STUDY';
   product?: string;
+  stage?: 'SEMENTEIRA' | 'EMERGENCIA' | 'VEGETATIVO' | 'FLORACAO' | 'FRUTIFICACAO' | 'MATURACAO' | 'COLHEITA';
+  condition?: 'EXCELENTE' | 'BOA' | 'ATENCAO' | 'CRITICA';
+  nutrientN?: number;
+  nutrientP?: number;
+  nutrientK?: number;
+  nutrientIndex?: number;
+  estimatedProductivityKgHa?: number;
+  recommendedNpk?: string;
+  season?: 'VERAO' | 'OUTONO' | 'INVERNO' | 'PRIMAVERA';
+  rainfallMm?: number;
+  region?: PublicClimateRegion;
+}
+
+export interface BackendAIAnalyzePayload {
+  imageName?: string;
+  context?: {
+    cultureName?: string;
+    soilType?: 'ARENOSO' | 'ARGILOSO' | 'SILTOSO' | 'MISTO';
+    region?: PublicClimateRegion;
+    season?: 'VERAO' | 'OUTONO' | 'INVERNO' | 'PRIMAVERA';
+    rainfallMm?: number;
+    fertilizationKgHa?: number;
+    animalHandlingDays?: number;
+    daysFromPlanting?: number;
+    imageSignals?: {
+      greenRatio?: number;
+      yellowRatio?: number;
+      brownRatio?: number;
+      brightness?: number;
+    };
+  };
 }
 
 export interface EvidencePayload {
@@ -97,6 +128,7 @@ export interface ReleaseSettlementPayload extends ResolveOrderPayload {
 }
 
 export type PublicMarketPriceCategory = 'COMMODITY' | 'LIVESTOCK' | 'INPUT';
+export type PublicClimateRegion = 'NORTE' | 'NORDESTE' | 'CENTRO_OESTE' | 'SUDESTE' | 'SUL';
 
 export interface PublicMarketPricePayload {
   symbol: string;
@@ -129,6 +161,168 @@ export interface PublicMarketSummaryPayload {
   topLivestock: PublicMarketPricePayload[];
   topInputs: PublicMarketPricePayload[];
   inputCostIndex: PublicInputCostIndexPayload | null;
+}
+
+export interface ExternalMarketBenchmarkItemPayload {
+  id: string;
+  symbol: string;
+  name: string;
+  category: PublicMarketPriceCategory;
+  unit: string;
+  currency: string;
+  internalPrice: number | null;
+  externalAveragePrice: number;
+  spreadPct: number | null;
+  externalSampleSize: number;
+  updatedAt: string;
+}
+
+export interface ExternalMarketBenchmarkPayload {
+  updatedAt: string;
+  internalDataAvailable: boolean;
+  stale: boolean;
+  items: ExternalMarketBenchmarkItemPayload[];
+}
+
+export interface ExternalNewsDigestItemPayload {
+  id: string;
+  title: string;
+  summary: string;
+  date: string;
+  category: 'Mercado';
+  sourceLabel: string;
+  link: string;
+}
+
+export interface ExternalNewsDigestPayload {
+  updatedAt: string;
+  stale: boolean;
+  items: ExternalNewsDigestItemPayload[];
+}
+
+export interface PublicClimateForecastDayPayload {
+  date: string;
+  tempMinC: number;
+  tempMaxC: number;
+  precipitationProbabilityPct: number;
+  precipitationMm: number;
+  windMaxKmh: number;
+}
+
+export interface PublicClimateForecastPayload {
+  region: PublicClimateRegion;
+  regionLabel: string;
+  referenceCity: string;
+  updatedAt: string;
+  stale: boolean;
+  days: PublicClimateForecastDayPayload[];
+}
+
+export type SupportModuleKey = 'ERP_CORE' | 'MPV_CICLO' | 'CEREBRO_NEXUS';
+export type SupportModuleEnvironment = 'LOCAL' | 'HOMOLOGACAO' | 'PRODUCAO';
+export type SupportModuleAuthMode = 'NONE' | 'BEARER' | 'API_KEY';
+export type SupportModuleHealthStatus = 'ONLINE' | 'OFFLINE' | 'UNCONFIGURED' | 'DISABLED' | 'DEGRADED';
+export type SupportModuleCriticality = 'CORE' | 'HIGH' | 'MEDIUM';
+
+export interface SupportModuleHealthPayload {
+  status: SupportModuleHealthStatus;
+  checkedAt: string;
+  message: string;
+  targetUrl?: string;
+  latencyMs?: number;
+  httpStatus?: number;
+}
+
+export interface SupportModuleRuntimePayload {
+  moduleKey: SupportModuleKey;
+  displayName: string;
+  description: string;
+  owningSystem: string;
+  criticality: SupportModuleCriticality;
+  baseUrl: string;
+  healthPath: string;
+  manifestPath: string;
+  environment: SupportModuleEnvironment;
+  authMode: SupportModuleAuthMode;
+  credentialRef: string;
+  enabled: boolean;
+  capabilities: string[];
+  lastConfiguredAt?: string;
+  lastConfiguredBy?: string;
+  lastHealthCheck?: SupportModuleHealthPayload | null;
+}
+
+export interface SupportModuleUpsertPayload {
+  moduleKey: SupportModuleKey;
+  baseUrl?: string;
+  healthPath?: string;
+  manifestPath?: string;
+  environment?: SupportModuleEnvironment;
+  authMode?: SupportModuleAuthMode;
+  credentialRef?: string;
+  enabled?: boolean;
+  capabilities?: string[];
+}
+
+export type SupportModuleManifestSource = 'DIRECT' | 'NEXUS' | 'CATALOG';
+
+export interface SupportModuleManifestPayload {
+  moduleKey: SupportModuleKey;
+  displayName: string;
+  description: string;
+  owningSystem: string;
+  capabilities: string[];
+  healthPath: string;
+  manifestPath: string;
+  source: SupportModuleManifestSource;
+  status: SupportModuleHealthStatus;
+  sourceUrl: string;
+  checkedAt: string;
+  message: string;
+  runtimeHealthMessage?: string;
+  runtimeTargetUrl?: string;
+  manifest?: Record<string, unknown>;
+}
+
+export type NexusSignalSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+export type NexusSignalDomain = 'MARKET' | 'SUPPORT' | 'INTEGRATION' | 'GOVERNANCE';
+
+export interface NexusSignalPayload {
+  id: string;
+  tenantId: string;
+  auditId: string;
+  sequence: number;
+  stream: string;
+  eventType: string;
+  operationType: string;
+  auditStatus: string;
+  actorUid: string;
+  actorRole: string;
+  eventCreatedAtIso: string;
+  observedAtIso: string;
+  severity: NexusSignalSeverity;
+  domain: NexusSignalDomain;
+  summary: string;
+  recommendedAction: string;
+  tags: string[];
+}
+
+export interface NexusSignalSummaryPayload {
+  tenantId: string;
+  totalSignals: number;
+  lastSignalAtIso?: string;
+  lastSeverity?: NexusSignalSeverity;
+  lastEventType?: string;
+  lastSummary?: string;
+  lastAuditSequence?: number;
+  severityCounts?: Record<string, number>;
+  domainCounts?: Record<string, number>;
+  statusCounts?: Record<string, number>;
+}
+
+export interface NexusSignalFeedPayload {
+  summary: NexusSignalSummaryPayload;
+  signals: NexusSignalPayload[];
 }
 
 const resolveBaseUrl = (functionName: 'api' | 'marketApi' | 'supportApi' = 'api') => {
@@ -216,8 +410,10 @@ export const backendApi = {
     return request<CarLookupPayload>('/v1/car/lookup', { carCode });
   },
 
-  analyzeImage(imageName: string) {
-    return request<BackendAIResult>('/v1/ai/analyze', { imageName });
+  analyzeImage(payload: string | BackendAIAnalyzePayload) {
+    const normalized: BackendAIAnalyzePayload =
+      typeof payload === 'string' ? { imageName: payload } : payload;
+    return request<BackendAIResult>('/v1/ai/analyze', normalized);
   },
 
   marketHealth() {
@@ -303,6 +499,27 @@ export const backendApi = {
     return request<{ requestId: string; status: string }>('/v1/support/decide-approval', payload);
   },
 
+  supportListModules() {
+    return request<SupportModuleRuntimePayload[]>('/v1/support/modules');
+  },
+
+  supportUpsertModule(payload: SupportModuleUpsertPayload) {
+    return request<SupportModuleRuntimePayload>('/v1/support/modules/upsert', payload);
+  },
+
+  supportCheckModules(payload?: { moduleKey?: SupportModuleKey }) {
+    return request<SupportModuleRuntimePayload[]>('/v1/support/modules/health', payload ?? {});
+  },
+
+  supportModulesManifest(payload?: { moduleKey?: SupportModuleKey }) {
+    return request<SupportModuleManifestPayload[]>('/v1/support/modules/manifest', payload ?? {});
+  },
+
+  supportNexusSignals(limit = 25) {
+    const query = `?limit=${encodeURIComponent(String(limit))}`;
+    return request<NexusSignalFeedPayload>(`/v1/support/nexus/signals${query}`);
+  },
+
   publicMarketSummary() {
     return publicRequest<PublicMarketSummaryPayload>('/v1/public/market/summary');
   },
@@ -316,5 +533,18 @@ export const backendApi = {
 
   publicInputCostIndex() {
     return publicRequest<PublicInputCostIndexPayload>('/v1/public/market/index/input-cost');
+  },
+
+  publicMarketExternalBenchmark() {
+    return publicRequest<ExternalMarketBenchmarkPayload>('/v1/public/market/external-benchmark');
+  },
+
+  publicMarketExternalNewsDigest() {
+    return publicRequest<ExternalNewsDigestPayload>('/v1/public/market/news/digest');
+  },
+
+  publicMarketClimateForecast(region: PublicClimateRegion) {
+    const query = `?region=${encodeURIComponent(region)}`;
+    return publicRequest<PublicClimateForecastPayload>(`/v1/public/market/climate-forecast${query}`);
   },
 };
