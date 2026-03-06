@@ -18,12 +18,33 @@ env:
   FIREBASE_PROJECT_ID: ciclo-plus-f9c8f
   VITE_BACKEND_BASE_URL: https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api
   VITE_USE_FIREBASE_EMULATORS: "false"
+  SETTLEMENT_PROVIDER: FIRESTORE_LEDGER
   VITE_FIREBASE_PROJECT_ID: ciclo-plus-f9c8f
   VITE_FIREBASE_STORAGE_BUCKET: ciclo-plus-f9c8f.firebasestorage.app
   VITE_FIREBASE_API_KEY: AIzaSyD-8rkmAkxCjrx2uDzOjshiq_83x8M7o7g
   VITE_FIREBASE_AUTH_DOMAIN: ciclo-plus-f9c8f.firebaseapp.com
   VITE_FIREBASE_MESSAGING_SENDER_ID: "1086183568033"
   VITE_FIREBASE_APP_ID: 1:1086183568033:web:c5f5e9b27c9bba7416f6e0
+  SUPPORT_MODULE_ERP_CORE_BASE_URL: ${{ vars.SUPPORT_MODULE_ERP_CORE_BASE_URL || vars.VITE_BACKEND_BASE_URL || env.VITE_BACKEND_BASE_URL }}
+  SUPPORT_MODULE_ERP_CORE_ENVIRONMENT: ${{ vars.SUPPORT_MODULE_ERP_CORE_ENVIRONMENT || 'PRODUCAO' }}
+  SUPPORT_MODULE_ERP_CORE_AUTH_MODE: ${{ vars.SUPPORT_MODULE_ERP_CORE_AUTH_MODE || 'NONE' }}
+  SUPPORT_MODULE_ERP_CORE_ENABLED: ${{ vars.SUPPORT_MODULE_ERP_CORE_ENABLED || 'true' }}
+  SUPPORT_MODULE_ERP_CORE_MANIFEST_PATH: ${{ vars.SUPPORT_MODULE_ERP_CORE_MANIFEST_PATH || '/v1/support/manifest' }}
+  SUPPORT_MODULE_MPV_CICLO_BASE_URL: ${{ vars.SUPPORT_MODULE_MPV_CICLO_BASE_URL || 'https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/mpvCicloApi' }}
+  SUPPORT_MODULE_MPV_CICLO_ENVIRONMENT: ${{ vars.SUPPORT_MODULE_MPV_CICLO_ENVIRONMENT || 'PRODUCAO' }}
+  SUPPORT_MODULE_MPV_CICLO_ENABLED: ${{ vars.SUPPORT_MODULE_MPV_CICLO_ENABLED || 'true' }}
+  SUPPORT_MODULE_MPV_CICLO_AUTH_MODE: ${{ vars.SUPPORT_MODULE_MPV_CICLO_AUTH_MODE || 'NONE' }}
+  SUPPORT_MODULE_MPV_CICLO_HEALTH_PATH: ${{ vars.SUPPORT_MODULE_MPV_CICLO_HEALTH_PATH || '/healthz' }}
+  SUPPORT_MODULE_MPV_CICLO_MANIFEST_PATH: ${{ vars.SUPPORT_MODULE_MPV_CICLO_MANIFEST_PATH || '/manifest' }}
+  SUPPORT_MODULE_MPV_CICLO_CAPABILITIES: ${{ vars.SUPPORT_MODULE_MPV_CICLO_CAPABILITIES || 'smartpos-webhook,pricing-lock,erp-forwarding,scheduler-retry' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_BASE_URL: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_BASE_URL }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_ENVIRONMENT: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_ENVIRONMENT || 'PRODUCAO' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_ENABLED: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_ENABLED || 'false' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_AUTH_MODE: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_AUTH_MODE || 'NONE' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_HEALTH_PATH: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_HEALTH_PATH || '/health' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_MANIFEST_PATH: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_MANIFEST_PATH || '/manifest' }}
+  SUPPORT_MODULE_CEREBRO_NEXUS_CAPABILITIES: ${{ vars.SUPPORT_MODULE_CEREBRO_NEXUS_CAPABILITIES || 'governance-engine,evidence-validation,audit-export,signal-fusion' }}
+  SUPPORT_MODULE_NEXUS_GATEWAY_URL: ${{ vars.SUPPORT_MODULE_NEXUS_GATEWAY_URL }}
 
 jobs:
   deploy:
@@ -56,22 +77,12 @@ jobs:
       - name: Validate strict Firebase real mode
         run: node scripts/verify-firebase-real-mode.mjs
 
+      - name: Validate production environment contract
+        run: node scripts/verify-production-env.mjs
+
       - name: Install web dependencies
         working-directory: ${{ env.APP_DIR }}
         run: npm ci
-
-      - name: Validate frontend Firebase env
-        run: |
-          for key in \
-            VITE_FIREBASE_API_KEY \
-            VITE_FIREBASE_AUTH_DOMAIN \
-            VITE_FIREBASE_MESSAGING_SENDER_ID \
-            VITE_FIREBASE_APP_ID; do
-            if [ -z "${!key}" ]; then
-              echo "Missing required secret/env: $key"
-              exit 1
-            fi
-          done
 
       - name: Web typecheck
         working-directory: ${{ env.APP_DIR }}
@@ -108,17 +119,15 @@ jobs:
         run: |
           firebase deploy \
             --project "${FIREBASE_PROJECT_ID}" \
-            --only "hosting,functions:api,functions:agroApi,functions:marketApi,functions:supportApi,functions:secureConfirmInboundEntry,functions:secureRegisterStockLoss,functions:adminSetUserClaims,functions:adminUpsertPublicMarketPoint,functions:recomputePublicInputCostIndexDaily,firestore:rules,firestore:indexes,storage" \
+            --only "hosting,functions:api,functions:agroApi,functions:marketApi,functions:supportApi,functions:mpvCicloApi,functions:secureConfirmInboundEntry,functions:secureRegisterStockLoss,functions:adminSetUserClaims,functions:adminUpsertPublicMarketPoint,functions:recomputePublicInputCostIndexDaily,functions:refreshPublicExternalMarketData,functions:nexusObserveAuditLog,functions:supportModulesHealthHeartbeat,firestore:rules,firestore:indexes,storage" \
             --token "${FIREBASE_TOKEN}"
 
       - name: Smoke test production endpoints
-        run: |
-          curl -fsS "https://ciclo-plus-f9c8f.web.app" >/dev/null
-          API_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/health")"
-          echo "$API_HEALTH" | grep -q '"status":"ok"'
-          AGRO_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/agroApi/health")"
-          echo "$AGRO_HEALTH" | grep -q '"status":"ok"'
-          MARKET_HEALTH="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/v1/market/health")"
-          echo "$MARKET_HEALTH" | grep -q '"status":"ok"'
-          PUBLIC_SUMMARY="$(curl -fsS "https://us-central1-ciclo-plus-f9c8f.cloudfunctions.net/api/v1/public/market/summary")"
-          echo "$PUBLIC_SUMMARY" | grep -q '"countsByCategory"'
+        env:
+          GO_LIVE_WEB_URL: https://${{ env.FIREBASE_PROJECT_ID }}.web.app
+          GO_LIVE_API_BASE_URL: https://us-central1-${{ env.FIREBASE_PROJECT_ID }}.cloudfunctions.net/api
+          GO_LIVE_AGRO_BASE_URL: https://us-central1-${{ env.FIREBASE_PROJECT_ID }}.cloudfunctions.net/agroApi
+          GO_LIVE_MARKET_HEALTH_URL: https://us-central1-${{ env.FIREBASE_PROJECT_ID }}.cloudfunctions.net/api/v1/market/health
+          GO_LIVE_MARKET_SUMMARY_URL: https://us-central1-${{ env.FIREBASE_PROJECT_ID }}.cloudfunctions.net/api/v1/public/market/summary
+          GO_LIVE_SUPPORT_MANIFEST_URL: https://us-central1-${{ env.FIREBASE_PROJECT_ID }}.cloudfunctions.net/api/v1/support/manifest
+        run: node scripts/go-live-smoke.mjs
