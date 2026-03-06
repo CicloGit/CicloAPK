@@ -38,8 +38,8 @@ const IntegrationsView: React.FC = () => {
     }, []);
 
     const erpStatus = integrationStatus?.erp.status ?? 'DISCONNECTED';
-    const erpProvider = integrationStatus?.erp.provider ?? 'Totvs (Protheus/RM)';
-    const asaasStatus = integrationStatus?.payments.status ?? 'CONNECTED';
+    const erpProvider = integrationStatus?.erp.provider ?? 'Nao configurado';
+    const asaasStatus = integrationStatus?.payments.status ?? 'DISCONNECTED';
     const asaasEnvironment = integrationStatus?.payments.environment ?? 'PRODUCAO';
     const sefazStatus = integrationStatus?.gov.sefaz ?? 'ACTIVE';
     const agrodefesaStatus = integrationStatus?.gov.agrodefesa ?? 'INACTIVE';
@@ -66,33 +66,6 @@ const IntegrationsView: React.FC = () => {
         }
     };
 
-    const handleProviderChange = async (value: string) => {
-        if (!integrationStatus) {
-            return;
-        }
-
-        const nextStatus = {
-            ...integrationStatus,
-            erp: {
-                ...integrationStatus.erp,
-                provider: value,
-            },
-        };
-
-        setIntegrationStatus(nextStatus);
-
-        try {
-            await integrationsService.updateStatus({ erp: nextStatus.erp });
-        } catch {
-            addToast({
-                type: 'error',
-                title: 'Falha ao Salvar',
-                message: 'Nao foi possivel atualizar o provedor agora.',
-                duration: 6000,
-            });
-        }
-    };
-
     if (isLoading) {
         return <LoadingSpinner text="Carregando integracoes..." />;
     }
@@ -113,8 +86,8 @@ const IntegrationsView: React.FC = () => {
                 Hub de Integracoes & Dados
             </h2>
             <p className="text-slate-600 mb-8">
-                Ecossistema de conexoes nativas. As configuracoes tecnicas sao gerenciadas pela equipe de
-                desenvolvimento para garantir a seguranca dos dados.
+                Ecossistema de conexoes nativas. ERP e pagamentos passam a refletir o runtime real do MPV Ciclo
+                para evitar configuracao paralela e reduzir risco operacional.
             </p>
 
             <div className="flex flex-col md:flex-row gap-8">
@@ -177,17 +150,12 @@ const IntegrationsView: React.FC = () => {
 
                                     <div className="mb-4">
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Provedor Homologado</label>
-                                        <select
-                                            className="w-full p-2 border border-slate-300 rounded bg-white"
-                                            disabled={erpStatus === 'CONNECTED'}
-                                            value={erpProvider}
-                                            onChange={(event) => handleProviderChange(event.target.value)}
-                                        >
-                                            <option>Totvs (Protheus/RM)</option>
-                                            <option>SAP Business One</option>
-                                            <option>Senior Sistemas</option>
-                                            <option>Omie</option>
-                                        </select>
+                                        <div className="w-full p-2 border border-slate-300 rounded bg-slate-50 text-slate-700">
+                                            {erpProvider}
+                                        </div>
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            Gerenciado automaticamente pelo runtime do modulo MPV Ciclo.
+                                        </p>
                                     </div>
 
                                     {erpStatus === 'DISCONNECTED' ? (
