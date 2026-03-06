@@ -32,6 +32,12 @@ const KpiCard: React.FC<{ title: string; value: string; icon: React.FC<{ classNa
   </div>
 );
 
+const EmptyState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+    {message}
+  </div>
+);
+
 const iconMap: Record<InvestorKpi['icon'], React.FC<{ className?: string }>> = {
   library: LibraryIcon,
   cash: CashIcon,
@@ -278,10 +284,16 @@ const InvestorDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
-        {kpis.map((kpi) => {
-          const Icon = iconMap[kpi.icon];
-          return <KpiCard key={kpi.id} title={kpi.label} value={kpi.value} icon={Icon} color={kpi.color} />;
-        })}
+        {kpis.length === 0 ? (
+          <div className="md:col-span-2 xl:col-span-4">
+            <EmptyState message="Nenhum KPI cadastrado para este tenant." />
+          </div>
+        ) : (
+          kpis.map((kpi) => {
+            const Icon = iconMap[kpi.icon];
+            return <KpiCard key={kpi.id} title={kpi.label} value={kpi.value} icon={Icon} color={kpi.color} />;
+          })
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
@@ -335,56 +347,70 @@ const InvestorDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {projects.map((project) => (
-                      <tr key={project.id} className="border-t border-slate-100">
-                        <td className="p-2 font-semibold text-slate-700">{project.name}</td>
-                        <td className="p-2">{project.portfolio}</td>
-                        <td className="p-2">{project.invested}</td>
-                        <td className="p-2">{project.expectedReturn}</td>
+                    {projects.length === 0 ? (
+                      <tr className="border-t border-slate-100">
+                        <td className="p-3 text-slate-500" colSpan={4}>Nenhum projeto de investimento cadastrado.</td>
                       </tr>
-                    ))}
+                    ) : (
+                      projects.map((project) => (
+                        <tr key={project.id} className="border-t border-slate-100">
+                          <td className="p-2 font-semibold text-slate-700">{project.name}</td>
+                          <td className="p-2">{project.portfolio}</td>
+                          <td className="p-2">{project.invested}</td>
+                          <td className="p-2">{project.expectedReturn}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {(Object.keys(segmentedPortfolio) as InvestorProject['portfolio'][]).map((segment) => (
-                <div key={segment} className="border border-slate-200 rounded-lg p-4 flex items-center">
-                  <div className="mr-auto">
-                    <p className="font-semibold text-slate-800">{segment}</p>
-                    <p className="text-xs text-slate-500">{segmentedPortfolio[segment].count} projetos</p>
+            projects.length === 0 ? (
+              <EmptyState message="Nenhum projeto para segmentar nesta carteira." />
+            ) : (
+              <div className="space-y-3">
+                {(Object.keys(segmentedPortfolio) as InvestorProject['portfolio'][]).map((segment) => (
+                  <div key={segment} className="border border-slate-200 rounded-lg p-4 flex items-center">
+                    <div className="mr-auto">
+                      <p className="font-semibold text-slate-800">{segment}</p>
+                      <p className="text-xs text-slate-500">{segmentedPortfolio[segment].count} projetos</p>
+                    </div>
+                    <p className="text-sm font-bold text-slate-800">{formatCurrency(segmentedPortfolio[segment].invested)}</p>
                   </div>
-                  <p className="text-sm font-bold text-slate-800">{formatCurrency(segmentedPortfolio[segment].invested)}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
           )}
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-xl font-bold text-slate-800 mb-4">Analise de Mercado</h3>
           <div className="space-y-3">
-            {marketSignals.map((signal) => (
-              <div key={signal.id} className="border border-slate-200 rounded-lg p-3">
-                <div className="flex justify-between items-center mb-1">
-                  <p className="font-semibold text-slate-800">{signal.market}</p>
-                  <span
-                    className={`text-xs font-bold px-2 py-1 rounded ${
-                      signal.trend === 'Alta'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : signal.trend === 'Baixa'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {signal.trend}
-                  </span>
+            {marketSignals.length === 0 ? (
+              <EmptyState message="Sem sinais de mercado cadastrados no tenant." />
+            ) : (
+              marketSignals.map((signal) => (
+                <div key={signal.id} className="border border-slate-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="font-semibold text-slate-800">{signal.market}</p>
+                    <span
+                      className={`text-xs font-bold px-2 py-1 rounded ${
+                        signal.trend === 'Alta'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : signal.trend === 'Baixa'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {signal.trend}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">{signal.variation}</p>
+                  <p className="text-xs text-slate-600 mt-1">{signal.outlook}</p>
                 </div>
-                <p className="text-xs text-slate-500">{signal.variation}</p>
-                <p className="text-xs text-slate-600 mt-1">{signal.outlook}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -394,18 +420,22 @@ const InvestorDashboard: React.FC = () => {
           <h3 className="text-xl font-bold text-slate-800 mb-4">Previsoes de Liquidacao</h3>
           <p className="text-sm text-slate-600 mb-3">Total previsto: {formatCurrency(totalForecast)}</p>
           <div className="space-y-3">
-            {forecasts.map((item) => (
-              <div key={item.id} className="border border-slate-200 rounded-lg p-3 flex items-center">
-                <div className="mr-auto">
-                  <p className="font-semibold text-slate-800">{item.asset}</p>
-                  <p className="text-xs text-slate-500">Liquidacao prevista em {item.expectedDate}</p>
+            {forecasts.length === 0 ? (
+              <EmptyState message="Sem previsoes de liquidacao registradas." />
+            ) : (
+              forecasts.map((item) => (
+                <div key={item.id} className="border border-slate-200 rounded-lg p-3 flex items-center">
+                  <div className="mr-auto">
+                    <p className="font-semibold text-slate-800">{item.asset}</p>
+                    <p className="text-xs text-slate-500">Liquidacao prevista em {item.expectedDate}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-slate-800">{formatCurrency(item.amount)}</p>
+                    <p className="text-xs text-slate-500">Confianca {item.confidence}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-slate-800">{formatCurrency(item.amount)}</p>
-                  <p className="text-xs text-slate-500">Confianca {item.confidence}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -413,34 +443,38 @@ const InvestorDashboard: React.FC = () => {
           <h3 className="text-xl font-bold text-slate-800 mb-4">Demandas de Investimento (Tecnicos de Campo)</h3>
           <p className="text-sm text-slate-600 mb-3">Demandas abertas/em analise: {formatCurrency(openDemandAmount)}</p>
           <div className="space-y-3">
-            {demands.map((demand) => (
-              <div key={demand.id} className="border border-slate-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <div className="mr-auto">
-                    <p className="font-semibold text-slate-800">{demand.projectName}</p>
-                    <p className="text-xs text-slate-500">{demand.technician} - {demand.stage}</p>
+            {demands.length === 0 ? (
+              <EmptyState message="Nenhuma demanda pendente para avaliacao." />
+            ) : (
+              demands.map((demand) => (
+                <div key={demand.id} className="border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <div className="mr-auto">
+                      <p className="font-semibold text-slate-800">{demand.projectName}</p>
+                      <p className="text-xs text-slate-500">{demand.technician} - {demand.stage}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 font-semibold">{demand.status}</span>
                   </div>
-                  <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 font-semibold">{demand.status}</span>
+                  <div className="flex flex-col md:flex-row md:items-center gap-2 mt-3">
+                    <p className="text-sm font-bold text-slate-800 md:mr-auto">{formatCurrency(demand.requestedAmount)}</p>
+                    <button
+                      onClick={() => void handleReviewDemand(demand, 'Em Analise')}
+                      disabled={demandActionId === demand.id}
+                      className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold hover:bg-slate-300 disabled:opacity-60"
+                    >
+                      Em analise
+                    </button>
+                    <button
+                      onClick={() => void handleReviewDemand(demand, 'Aprovada')}
+                      disabled={demandActionId === demand.id}
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      Aprovar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-col md:flex-row md:items-center gap-2 mt-3">
-                  <p className="text-sm font-bold text-slate-800 md:mr-auto">{formatCurrency(demand.requestedAmount)}</p>
-                  <button
-                    onClick={() => void handleReviewDemand(demand, 'Em Analise')}
-                    disabled={demandActionId === demand.id}
-                    className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold hover:bg-slate-300 disabled:opacity-60"
-                  >
-                    Em analise
-                  </button>
-                  <button
-                    onClick={() => void handleReviewDemand(demand, 'Aprovada')}
-                    disabled={demandActionId === demand.id}
-                    className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    Aprovar
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -466,26 +500,32 @@ const InvestorDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {movements.map((movement) => (
-                <tr key={movement.id} className="border-t border-slate-100">
-                  <td className="p-3">{movement.date}</td>
-                  <td className="p-3">{movement.description}</td>
-                  <td className="p-3">
-                    <span className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 font-semibold">{movement.settlement}</span>
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`text-xs px-2 py-1 rounded font-semibold ${
-                        movement.auditStatus === 'Validado' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                      }`}
-                    >
-                      {movement.auditStatus}
-                    </span>
-                  </td>
-                  <td className="p-3">{movement.direction}</td>
-                  <td className="p-3 font-semibold">{formatCurrency(movement.amount)}</td>
+              {movements.length === 0 ? (
+                <tr className="border-t border-slate-100">
+                  <td className="p-3 text-slate-500" colSpan={6}>Sem movimentacoes financeiras registradas.</td>
                 </tr>
-              ))}
+              ) : (
+                movements.map((movement) => (
+                  <tr key={movement.id} className="border-t border-slate-100">
+                    <td className="p-3">{movement.date}</td>
+                    <td className="p-3">{movement.description}</td>
+                    <td className="p-3">
+                      <span className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 font-semibold">{movement.settlement}</span>
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`text-xs px-2 py-1 rounded font-semibold ${
+                          movement.auditStatus === 'Validado' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {movement.auditStatus}
+                      </span>
+                    </td>
+                    <td className="p-3">{movement.direction}</td>
+                    <td className="p-3 font-semibold">{formatCurrency(movement.amount)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

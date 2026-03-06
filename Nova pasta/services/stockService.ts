@@ -1,8 +1,10 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { AuditChain } from '../lib/auditChain';
 import { RulesEngine, hasSufficientStock } from '../lib/rulesEngine';
 import { db } from '../config/firebase';
 import { AuditEvent, InventoryItem, StockMovement } from '../types';
+import { parseDateToTimestamp } from './dateUtils';
+import { TenantContext, hasTenantAccess, resolveTenantContext, withTenantFields } from './tenantContext';
 
 const inventoryCollection = collection(db, 'inventoryItems');
 const movementCollection = collection(db, 'stockMovements');
@@ -49,25 +51,40 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
   verified: Boolean(raw.verified),
   proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
 });
-async function getLatestAuditEvent(): Promise<AuditEvent | null> {
-  const auditSnapshot = await getDocs(query(auditCollection, orderBy('createdAt', 'desc'), limit(1)));
+
+const toEventTimestamp = (event: AuditEvent): number => {
+  const parsed = new Date(event.timestamp).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+async function getLatestAuditEvent(context: TenantContext): Promise<AuditEvent | null> {
+  const auditSnapshot = await getDocs(query(auditCollection, where('tenantId', '==', context.tenantId)));
   if (auditSnapshot.empty) {
     return null;
   }
 
-  const docSnapshot = auditSnapshot.docs[0];
-  return toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
+  const events = auditSnapshot.docs
+    .map((docSnapshot: any) => toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+    .sort((a: AuditEvent, b: AuditEvent) => toEventTimestamp(b) - toEventTimestamp(a));
+  return events[0] ?? null;
 }
 
 export const stockService = {
   async listInventory(): Promise<InventoryItem[]> {
-    const snapshot = await getDocs(inventoryCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(inventoryCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toInventoryItem(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, item: toInventoryItem(docSnapshot.id, raw) };
+      })
+      .filter((row: { raw: Record<string, unknown> }) => hasTenantAccess(row.raw, context))
+      .map((row: { item: InventoryItem }) => row.item)
       .sort((a: InventoryItem, b: InventoryItem) => a.name.localeCompare(b.name));
   },
 
   async createInventoryItem(payload: Omit<InventoryItem, 'id' | 'lastUpdated'>): Promise<InventoryItem> {
+    const context = await resolveTenantContext();
     const newItem: InventoryItem = {
       id: `INV-${Date.now()}`,
       name: payload.name,
@@ -81,27 +98,43 @@ export const stockService = {
       lastUpdated: todayBR(),
     };
 
-    await setDoc(doc(db, 'inventoryItems', newItem.id), {
-      ...newItem,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(
+      doc(db, 'inventoryItems', newItem.id),
+      withTenantFields(
+        {
+          ...newItem,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
+      { merge: true }
+    );
 
     return newItem;
   },
 
   async listMovements(): Promise<StockMovement[]> {
-    const snapshot = await getDocs(query(movementCollection, orderBy('createdAt', 'desc')));
-    return snapshot.docs.map((docSnapshot: any) => toStockMovement(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(movementCollection, where('tenantId', '==', context.tenantId)));
+    return snapshot.docs
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, movement: toStockMovement(docSnapshot.id, raw) };
+      })
+      .filter((row: { raw: Record<string, unknown> }) => hasTenantAccess(row.raw, context))
+      .map((row: { movement: StockMovement }) => row.movement)
+      .sort((a: StockMovement, b: StockMovement) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
   async registerStockUsage(
     data: { itemId: string; quantity: number; reason: string; proofUrl: string; requester: string }
   ): Promise<{ success: boolean; message?: string; newMovement?: StockMovement; auditEvent?: AuditEvent }> {
     try {
+      const context = await resolveTenantContext();
 
       const itemRef = doc(db, 'inventoryItems', data.itemId);
-      const lastAuditEvent = await getLatestAuditEvent();
+      const lastAuditEvent = await getLatestAuditEvent(context);
       const previousHash = lastAuditEvent ? lastAuditEvent.hash : '0'.repeat(64);
 
       const currentInventory = await this.listInventory();
@@ -147,6 +180,9 @@ export const stockService = {
         if (!itemSnapshot.exists()) {
           throw new Error('Item de estoque nao encontrado.');
         }
+        if (!hasTenantAccess(itemSnapshot.data() as Record<string, unknown>, context)) {
+          throw new Error('Sem permissao para movimentar item de outro tenant.');
+        }
 
         const itemData = toInventoryItem(itemSnapshot.id, itemSnapshot.data() as Record<string, unknown>);
         const businessValidation = RulesEngine.validate([hasSufficientStock], { quantity: data.quantity }, { item: itemData });
@@ -160,17 +196,30 @@ export const stockService = {
           updatedAt: serverTimestamp(),
         });
 
-        transaction.set(doc(db, 'stockMovements', newMovement.id), {
-          ...newMovement,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        transaction.set(
+          doc(db, 'stockMovements', newMovement.id),
+          withTenantFields(
+            {
+              ...newMovement,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            context
+          )
+        );
 
-        transaction.set(doc(db, 'auditEvents', newAuditEvent.id), {
-          ...newAuditEvent,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        transaction.set(
+          doc(db, 'auditEvents', newAuditEvent.id),
+          withTenantFields(
+            {
+              ...newAuditEvent,
+              immutable: true,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            context
+          )
+        );
       });
 
       return { success: true, newMovement, auditEvent: newAuditEvent };
@@ -185,8 +234,16 @@ export const stockService = {
     invoiceNumber: string
   ): Promise<{ success: boolean; message?: string; updatedMovement?: StockMovement }> {
     try {
+      const context = await resolveTenantContext();
 
       const movementRef = doc(db, 'stockMovements', movementId);
+      const movementSnapshot = await getDoc(movementRef);
+      if (!movementSnapshot.exists()) {
+        return { success: false, message: 'Movimentacao nao encontrada.' };
+      }
+      if (!hasTenantAccess(movementSnapshot.data() as Record<string, unknown>, context)) {
+        return { success: false, message: 'Sem permissao para atualizar movimentacao de outro tenant.' };
+      }
       const movements = await this.listMovements();
       const movement = movements.find((entry) => entry.id === movementId);
 
@@ -203,6 +260,9 @@ export const stockService = {
         const itemSnapshot = await transaction.get(itemRef);
         if (!itemSnapshot.exists()) {
           throw new Error('Item de estoque nao encontrado.');
+        }
+        if (!hasTenantAccess(itemSnapshot.data() as Record<string, unknown>, context)) {
+          throw new Error('Sem permissao para atualizar item de outro tenant.');
         }
 
         const item = toInventoryItem(itemSnapshot.id, itemSnapshot.data() as Record<string, unknown>);
@@ -234,13 +294,17 @@ export const stockService = {
   },
 
   async appendStockMovement(movement: StockMovement): Promise<void> {
+    const context = await resolveTenantContext();
     await setDoc(
       doc(db, 'stockMovements', movement.id),
-      {
-        ...movement,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
+      withTenantFields(
+        {
+          ...movement,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
       { merge: true }
     );
   },
@@ -254,6 +318,7 @@ export const stockService = {
     invoiceNumber?: string;
     reason?: string;
   }): Promise<StockMovement> {
+    const context = await resolveTenantContext();
     const movement: StockMovement = {
       id: `MOV-${Date.now()}`,
       itemId: payload.itemId,
@@ -272,16 +337,25 @@ export const stockService = {
     const itemRef = doc(db, 'inventoryItems', payload.itemId);
 
     await runTransaction(db, async (transaction: any) => {
-      transaction.set(movementRef, {
-        ...movement,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      transaction.set(
+        movementRef,
+        withTenantFields(
+          {
+            ...movement,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          context
+        )
+      );
 
       if (payload.invoiceNumber) {
         const itemSnapshot = await transaction.get(itemRef);
         if (!itemSnapshot.exists()) {
           throw new Error('Item de estoque nao encontrado para entrada.');
+        }
+        if (!hasTenantAccess(itemSnapshot.data() as Record<string, unknown>, context)) {
+          throw new Error('Sem permissao para entrada em item de outro tenant.');
         }
         const itemData = toInventoryItem(itemSnapshot.id, itemSnapshot.data() as Record<string, unknown>);
         transaction.update(itemRef, {
@@ -296,6 +370,15 @@ export const stockService = {
   },
 
   async updateMovementStatus(movementId: string, status: StockMovement['status']): Promise<void> {
-    await updateDoc(doc(db, 'stockMovements', movementId), { status, updatedAt: serverTimestamp() });
+    const context = await resolveTenantContext();
+    const movementRef = doc(db, 'stockMovements', movementId);
+    const snapshot = await getDoc(movementRef);
+    if (!snapshot.exists()) {
+      throw new Error('Movimentacao nao encontrada.');
+    }
+    if (!hasTenantAccess(snapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para atualizar movimentacao de outro tenant.');
+    }
+    await updateDoc(movementRef, { status, updatedAt: serverTimestamp() });
   },
 };

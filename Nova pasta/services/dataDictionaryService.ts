@@ -1,7 +1,8 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toDataDictionaryEntities } from '../config/operationsCatalog';
 import { DataEntity } from '../types';
+import { resolveTenantContext } from './tenantContext';
 
 const dataDictionaryCollection = collection(db, 'dataDictionaryEntities');
 const toDataEntity = (id: string, raw: Record<string, unknown>): DataEntity => ({
@@ -12,7 +13,8 @@ const toDataEntity = (id: string, raw: Record<string, unknown>): DataEntity => (
 
 export const dataDictionaryService = {
   async listEntities(): Promise<DataEntity[]> {
-    const snapshot = await getDocs(dataDictionaryCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(dataDictionaryCollection, where('tenantId', '==', context.tenantId)));
     const remoteEntities = snapshot.docs.map((docSnapshot: any) =>
       toDataEntity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
@@ -30,4 +32,3 @@ export const dataDictionaryService = {
     return Array.from(merged.values());
   },
 };
-

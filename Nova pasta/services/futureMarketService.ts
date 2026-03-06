@@ -1,6 +1,7 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { MarketOpportunity } from '../types';
+import { resolveTenantContext, withTenantFields } from './tenantContext';
 
 const opportunitiesCollection = collection(db, 'marketOpportunities');
 const locksCollection = collection(db, 'futureMarketLocks');
@@ -28,13 +29,15 @@ export interface FutureLockContract {
 }
 export const futureMarketService = {
   async listOpportunities(): Promise<MarketOpportunity[]> {
-    const snapshot = await getDocs(opportunitiesCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(opportunitiesCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toOpportunity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: MarketOpportunity, b: MarketOpportunity) => a.commodity.localeCompare(b.commodity));
   },
 
   async createLockContract(opportunity: MarketOpportunity, quantity: number): Promise<FutureLockContract> {
+    const context = await resolveTenantContext();
     const contract: Omit<FutureLockContract, 'id'> = {
       opportunityId: opportunity.id,
       commodity: opportunity.commodity,
@@ -46,11 +49,17 @@ export const futureMarketService = {
       createdAt: new Date().toLocaleString('pt-BR'),
     };
 
-    const saved = await addDoc(locksCollection, {
-      ...contract,
-      createdAtTs: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const saved = await addDoc(
+      locksCollection,
+      withTenantFields(
+        {
+          ...contract,
+          createdAtTs: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        context
+      )
+    );
 
     return {
       id: saved.id,
@@ -58,4 +67,3 @@ export const futureMarketService = {
     };
   },
 };
-

@@ -3,15 +3,29 @@ import { db } from '../config/firebase';
 import {
   AggregatedStat,
   AuctionListing,
+  ExternalMarketBenchmark,
+  ExternalMarketBenchmarkItem,
+  ExternalNewsDigest,
+  ExternalNewsDigestItem,
   MarketSaturation,
   MarketTrend,
   NewsItem,
+  PublicClimateForecast,
+  PublicClimateRegion,
   PublicInputCostIndex,
   PublicMarketPriceCategory,
   PublicMarketPriceItem,
   PublicMarketSummary,
 } from '../types';
-import { backendApi, PublicInputCostIndexPayload, PublicMarketPricePayload, PublicMarketSummaryPayload } from './backendApi';
+import {
+  backendApi,
+  ExternalMarketBenchmarkPayload,
+  ExternalNewsDigestPayload,
+  PublicClimateForecastPayload,
+  PublicInputCostIndexPayload,
+  PublicMarketPricePayload,
+  PublicMarketSummaryPayload,
+} from './backendApi';
 
 const marketTrendsCollection = collection(db, 'marketTrends');
 const regionalStatsCollection = collection(db, 'regionalStats');
@@ -117,6 +131,61 @@ const toPublicMarketSummary = (raw: PublicMarketSummaryPayload): PublicMarketSum
   inputCostIndex: toPublicInputCostIndex(raw.inputCostIndex),
 });
 
+const toExternalMarketBenchmarkItem = (raw: ExternalMarketBenchmarkPayload['items'][number]): ExternalMarketBenchmarkItem => ({
+  id: String(raw.id ?? ''),
+  symbol: String(raw.symbol ?? ''),
+  name: String(raw.name ?? ''),
+  category: (raw.category as ExternalMarketBenchmarkItem['category']) ?? 'COMMODITY',
+  unit: String(raw.unit ?? ''),
+  currency: String(raw.currency ?? 'BRL'),
+  internalPrice: raw.internalPrice === null ? null : Number(raw.internalPrice ?? 0),
+  externalAveragePrice: Number(raw.externalAveragePrice ?? 0),
+  spreadPct: raw.spreadPct === null ? null : Number(raw.spreadPct ?? 0),
+  externalSampleSize: Number(raw.externalSampleSize ?? 0),
+  updatedAt: String(raw.updatedAt ?? new Date().toISOString()),
+});
+
+const toExternalMarketBenchmark = (raw: ExternalMarketBenchmarkPayload): ExternalMarketBenchmark => ({
+  updatedAt: String(raw.updatedAt ?? new Date().toISOString()),
+  internalDataAvailable: raw.internalDataAvailable === true,
+  stale: raw.stale === true,
+  items: Array.isArray(raw.items) ? raw.items.map(toExternalMarketBenchmarkItem) : [],
+});
+
+const toExternalNewsDigestItem = (raw: ExternalNewsDigestPayload['items'][number]): ExternalNewsDigestItem => ({
+  id: String(raw.id ?? ''),
+  title: String(raw.title ?? ''),
+  summary: String(raw.summary ?? ''),
+  date: String(raw.date ?? ''),
+  category: 'Mercado',
+  sourceLabel: String(raw.sourceLabel ?? 'Fonte externa verificada'),
+  link: String(raw.link ?? ''),
+});
+
+const toExternalNewsDigest = (raw: ExternalNewsDigestPayload): ExternalNewsDigest => ({
+  updatedAt: String(raw.updatedAt ?? new Date().toISOString()),
+  stale: raw.stale === true,
+  items: Array.isArray(raw.items) ? raw.items.map(toExternalNewsDigestItem) : [],
+});
+
+const toPublicClimateForecast = (raw: PublicClimateForecastPayload): PublicClimateForecast => ({
+  region: raw.region,
+  regionLabel: String(raw.regionLabel ?? raw.region ?? ''),
+  referenceCity: String(raw.referenceCity ?? ''),
+  updatedAt: String(raw.updatedAt ?? new Date().toISOString()),
+  stale: raw.stale === true,
+  days: Array.isArray(raw.days)
+    ? raw.days.map((item) => ({
+        date: String(item.date ?? ''),
+        tempMinC: Number(item.tempMinC ?? 0),
+        tempMaxC: Number(item.tempMaxC ?? 0),
+        precipitationProbabilityPct: Number(item.precipitationProbabilityPct ?? 0),
+        precipitationMm: Number(item.precipitationMm ?? 0),
+        windMaxKmh: Number(item.windMaxKmh ?? 0),
+      }))
+    : [],
+});
+
 export const publicMarketService = {
   async listMarketTrends(): Promise<MarketTrend[]> {
     const snapshot = await getDocs(marketTrendsCollection);
@@ -161,5 +230,20 @@ export const publicMarketService = {
   async getInputCostIndex(): Promise<PublicInputCostIndex | null> {
     const payload = await backendApi.publicInputCostIndex();
     return toPublicInputCostIndex(payload);
+  },
+
+  async getExternalMarketBenchmark(): Promise<ExternalMarketBenchmark> {
+    const payload = await backendApi.publicMarketExternalBenchmark();
+    return toExternalMarketBenchmark(payload);
+  },
+
+  async getExternalNewsDigest(): Promise<ExternalNewsDigest> {
+    const payload = await backendApi.publicMarketExternalNewsDigest();
+    return toExternalNewsDigest(payload);
+  },
+
+  async getClimateForecast(region: PublicClimateRegion): Promise<PublicClimateForecast> {
+    const payload = await backendApi.publicMarketClimateForecast(region);
+    return toPublicClimateForecast(payload);
   },
 };

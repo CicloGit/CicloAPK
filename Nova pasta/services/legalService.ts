@@ -1,5 +1,6 @@
-﻿import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { resolveTenantContext } from './tenantContext';
 
 export interface LegalContract {
   id: string;
@@ -57,26 +58,26 @@ const toAlert = (id: string, raw: Record<string, unknown>): LegalComplianceAlert
 
 export const legalService = {
   async listContracts(): Promise<LegalContract[]> {
-    const snapshot = await getDocs(contractsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(contractsCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) =>
       toContract(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
 
   async listLicenses(): Promise<LegalLicense[]> {
-    const snapshot = await getDocs(licensesCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(licensesCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) =>
       toLicense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
 
   async listComplianceAlerts(): Promise<LegalComplianceAlert[]> {
-    const snapshot = await getDocs(complianceCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(complianceCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) =>
       toAlert(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
 };
-
-
-

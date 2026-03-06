@@ -33,6 +33,7 @@ const CommercialView: React.FC = () => {
     const [selectedCardId, setSelectedCardId] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
     const [marketplaceListings, setMarketplaceListings] = useState<MarketplaceListing[]>([]);
     const [corporateCards, setCorporateCards] = useState<CorporateCard[]>([]);
     const [partnerStores, setPartnerStores] = useState<PartnerStore[]>([]);
@@ -40,9 +41,10 @@ const CommercialView: React.FC = () => {
     // Search and Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
-    const [userLocation, setUserLocation] = useState('Sorriso, MT'); // Mocked User Location
+    const [userLocation, setUserLocation] = useState('');
     const [sortBy, setSortBy] = useState<'price_asc' | 'rating_desc'>('price_asc');
     const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
+    const toErrorMessage = (reason: unknown): string => (reason instanceof Error ? reason.message : 'erro desconhecido');
 
     const [orders, setOrders] = useState<MarketplaceOrderHistory[]>([]);
     const marketplaceTabs = useMemo(
@@ -74,9 +76,10 @@ const CommercialView: React.FC = () => {
         const loadCommercialData = async () => {
             setIsLoading(true);
             setLoadError(null);
+            setPartialWarnings([]);
             try {
                 const isSupplierPersona = currentUser?.role === 'Fornecedor' || currentUser?.claimsRole === 'SUPPLIER';
-                const [loadedListings, loadedCards, loadedStores] = await Promise.all([
+                const [loadedListings, loadedCards, loadedStores, loadedOrders] = await Promise.allSettled([
                     commercialService.listMarketplaceListings({
                         categories: allowedCategories,
                         requirePublished: true,
@@ -84,15 +87,54 @@ const CommercialView: React.FC = () => {
                         ownerUserId: currentUser?.uid,
                     }),
                     commercialService.listCorporateCards(),
-                    commercialService.listPartnerStores()
+                    commercialService.listPartnerStores(),
+                    commercialService.listMarketplaceOrderHistory(),
                 ]);
-                const loadedOrders = await commercialService.listMarketplaceOrderHistory();
-                setMarketplaceListings(loadedListings);
-                setCorporateCards(loadedCards);
-                setPartnerStores(loadedStores);
-                setOrders(loadedOrders);
-                if (loadedCards.length > 0) {
-                    setSelectedCardId(loadedCards[0].id);
+
+                const warnings: string[] = [];
+                let hasAnySuccess = false;
+
+                if (loadedListings.status === 'fulfilled') {
+                    setMarketplaceListings(loadedListings.value);
+                    hasAnySuccess = true;
+                } else {
+                    setMarketplaceListings([]);
+                    warnings.push(`Ofertas: ${toErrorMessage(loadedListings.reason)}`);
+                }
+
+                if (loadedCards.status === 'fulfilled') {
+                    setCorporateCards(loadedCards.value);
+                    hasAnySuccess = true;
+                    if (loadedCards.value.length > 0) {
+                        setSelectedCardId(loadedCards.value[0].id);
+                    }
+                } else {
+                    setCorporateCards([]);
+                    warnings.push(`Cartoes corporativos: ${toErrorMessage(loadedCards.reason)}`);
+                }
+
+                if (loadedStores.status === 'fulfilled') {
+                    setPartnerStores(loadedStores.value);
+                    if (loadedStores.value.length > 0) {
+                        setUserLocation((previous) => previous || loadedStores.value[0].location);
+                    }
+                    hasAnySuccess = true;
+                } else {
+                    setPartnerStores([]);
+                    warnings.push(`Lojas parceiras: ${toErrorMessage(loadedStores.reason)}`);
+                }
+
+                if (loadedOrders.status === 'fulfilled') {
+                    setOrders(loadedOrders.value);
+                    hasAnySuccess = true;
+                } else {
+                    setOrders([]);
+                    warnings.push(`Historico de pedidos: ${toErrorMessage(loadedOrders.reason)}`);
+                }
+
+                setPartialWarnings(warnings);
+                if (!hasAnySuccess) {
+                    throw new Error('Nenhuma fonte comercial respondeu com sucesso.');
                 }
             } catch {
                 setLoadError('Nao foi possivel carregar os dados comerciais.');
@@ -238,7 +280,7 @@ const CommercialView: React.FC = () => {
                     <p className="text-slate-600 text-sm mb-2">{activeTabMeta?.description}</p>
                     <p className="text-slate-600 flex items-center text-sm">
                         <span className="mr-2">Localização do Produtor:</span>
-                        <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">{userLocation}</span>
+                        <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">{userLocation || 'Nao informado'}</span>
                     </p>
                 </div>
                 <button 
@@ -254,6 +296,11 @@ const CommercialView: React.FC = () => {
                     )}
                 </button>
             </div>
+            {partialWarnings.length > 0 && (
+                <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    Carregamento parcial detectado: {partialWarnings.slice(0, 3).join(' | ')}
+                </div>
+            )}
 
             {/* Persona Tabs */}
             <div className="flex flex-wrap gap-2 mb-6">
@@ -304,15 +351,26 @@ const CommercialView: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500 border-t pt-3">
                     <span>{filteredListings.length} ofertas encontradas na rede credenciada.</span>
-                    <div className="flex items-center">
-                        <span className="mr-2">Ordenar por:</span>
+                    <div className="flex items-center gap-2">
+                        <span>Local:</span>
+                        <select
+                            value={userLocation}
+                            onChange={(e) => setUserLocation(e.target.value)}
+                            className="p-1 border border-slate-300 rounded text-slate-700 bg-slate-50 focus:outline-none"
+                        >
+                            <option value="">Todos</option>
+                            {Array.from(new Set(partnerStores.map((store) => store.location).filter(Boolean))).map((location) => (
+                                <option key={location} value={location}>{location}</option>
+                            ))}
+                        </select>
+                        <span className="ml-2">Ordenar:</span>
                         <select 
                             value={sortBy} 
                             onChange={(e) => setSortBy(e.target.value as 'price_asc' | 'rating_desc')}
                             className="p-1 border border-slate-300 rounded text-slate-700 bg-slate-50 focus:outline-none"
                         >
-                            <option value="price_asc">Menor Preço Médio (Padrão)</option>
-                            <option value="rating_desc">Melhor Avaliação</option>
+                            <option value="price_asc">Menor preco medio</option>
+                            <option value="rating_desc">Melhor avaliacao</option>
                         </select>
                     </div>
                 </div>

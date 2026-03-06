@@ -16,6 +16,7 @@ const PROFILE_ENTRY_ROUTE: Record<AccessProfileType, string> = {
   EMPRESA_FORNECEDORA: '/supplier-portal',
   EMPRESA_INTEGRADORA: '/integrator-portal',
   OPERADOR: '/operator-portal',
+  LEILOEIRO: '/auction-portal',
   TECNICO: '/technician-portal',
   GESTOR: '/dashboard',
 };
@@ -115,6 +116,9 @@ const LoginView: React.FC = () => {
       }
     } catch (authError) {
       const message = authError instanceof Error ? authError.message : 'Falha ao autenticar.';
+      if (mode === 'REGISTER' && /ja cadastrad|inscricao ja cadastrada/i.test(message)) {
+        setMode('LOGIN');
+      }
       setError(message);
     } finally {
       resetSensitiveState();
@@ -196,6 +200,12 @@ const LoginView: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'REGISTER' && profileType === 'OPERADOR' && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
+              Cadastro de operador exige autorizacao previa no Portal da Propriedade, com CPF + inscricao da propriedade (CAR/IE).
+            </p>
+          )}
+
           {mode === 'REGISTER' && (
             <div>
               <label htmlFor="full-name" className="block text-sm font-semibold text-slate-700 mb-1">
@@ -228,10 +238,10 @@ const LoginView: React.FC = () => {
             />
           </div>
 
-          {mode === 'REGISTER' && profile.requiresStateRegistration && (
+          {mode === 'REGISTER' && (profile.requiresStateRegistration || profileType === 'OPERADOR') && (
             <div>
               <label htmlFor="state-registration" className="block text-sm font-semibold text-slate-700 mb-1">
-                Inscricao Estadual
+                {profileType === 'OPERADOR' ? 'Inscricao da Propriedade (CAR/IE)' : 'Inscricao Estadual'}
               </label>
               <input
                 id="state-registration"
@@ -239,7 +249,7 @@ const LoginView: React.FC = () => {
                 value={stateRegistration}
                 onChange={(event) => setStateRegistration(event.target.value)}
                 className="w-full p-3 border border-slate-300 rounded-md"
-                placeholder="Ex.: 123456789 ou ISENTO"
+                placeholder={profileType === 'OPERADOR' ? 'Ex.: MT-123456 (CAR) ou IE da fazenda' : 'Ex.: 123456789 ou ISENTO'}
                 required
               />
             </div>

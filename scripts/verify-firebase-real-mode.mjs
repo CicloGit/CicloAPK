@@ -13,6 +13,7 @@ const targetDirs = [
   path.join(appDir, 'components'),
   path.join(appDir, 'config'),
   path.join(appDir, 'contexts'),
+  path.join(appDir, 'functions', 'src'),
 ];
 
 const fileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -126,6 +127,33 @@ function walk(currentDir) {
           reason: 'Referencia a mock local detectada',
         });
       }
+
+      if (/FIRESTORE_STUB|ALLOW_SETTLEMENT_STUB_IN_PRODUCTION/.test(line)) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Provider de settlement em modo stub detectado',
+        });
+      }
+
+      if (/return\s+items\.length\s*>\s*0\s*\?\s*items\s*:\s*default[A-Z][A-Za-z0-9_]*/.test(line)) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Fallback para dataset local detectado',
+        });
+      }
+
+      if (
+        relPath.includes(path.join('Nova pasta', 'services')) &&
+        /\bconst\s+default[A-Z][A-Za-z0-9_]*\s*:\s*[^=]+\s*=\s*\[/.test(line)
+      ) {
+        findings.push({
+          file: relPath,
+          line: index + 1,
+          reason: 'Dataset default local detectado em service',
+        });
+      }
     });
 
     const ensureSeedBody = getEnsureSeedBody(content);
@@ -153,12 +181,7 @@ for (const finding of findings) {
   console.error(` - ${finding.file}:${finding.line} -> ${finding.reason}`);
 }
 
-if (process.env.ALLOW_MOCKS_IN_PRODUCTION === '1') {
-  console.warn('[real-mode] WARNING: bypass ativo via ALLOW_MOCKS_IN_PRODUCTION=1.');
-  process.exit(0);
-}
-
 console.error(
-  '[real-mode] Bloqueando deploy de producao. Migre os modulos para Firebase real ou use bypass controlado.'
+  '[real-mode] Bloqueando deploy de producao. Migre os modulos para Firebase real.'
 );
 process.exit(1);

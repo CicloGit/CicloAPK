@@ -34,7 +34,7 @@ const AIAnalysisView: React.FC = () => {
 
         setIsAnalyzing(true);
         try {
-            const analysis = await aiAnalysisService.runAnalysis(imageName ?? undefined);
+            const analysis = await aiAnalysisService.runAnalysis({ imageName: imageName ?? undefined });
             setResult(analysis);
         } catch {
             addToast({

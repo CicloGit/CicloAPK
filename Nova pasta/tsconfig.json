@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
@@ -20,7 +20,6 @@
   "include": [
     "App.tsx",
     "index.tsx",
-    "constants.ts",
     "types.ts",
     "components/**/*.ts",
     "components/**/*.tsx",
@@ -37,3 +36,4 @@
   ],
   "exclude": ["node_modules", "dist"]
 }
+

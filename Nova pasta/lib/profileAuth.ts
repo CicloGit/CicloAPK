@@ -81,6 +81,20 @@ export const ACCESS_PROFILE_DEFINITIONS: Record<AccessProfileType, AccessProfile
     requiresCouncilData: false,
     simulationOnly: false,
   },
+  LEILOEIRO: {
+    profileType: 'LEILOEIRO',
+    label: 'Leiloeiro',
+    role: 'Leiloeiro',
+    identifierType: 'CPF',
+    identifierLabel: 'CPF',
+    identifierPlaceholder: '000.000.000-00',
+    nameLabel: 'Nome',
+    namePlaceholder: 'Nome completo',
+    requiresStateRegistration: false,
+    requiresSpecialty: false,
+    requiresCouncilData: false,
+    simulationOnly: false,
+  },
   TECNICO: {
     profileType: 'TECNICO',
     label: 'Tecnico',
@@ -116,6 +130,7 @@ const PROFILE_ORDER: AccessProfileType[] = [
   'EMPRESA_FORNECEDORA',
   'EMPRESA_INTEGRADORA',
   'OPERADOR',
+  'LEILOEIRO',
   'TECNICO',
   'GESTOR',
 ];
@@ -341,6 +356,8 @@ export const inferProfileTypeFromRole = (role: unknown): AccessProfileType | und
       return 'EMPRESA_INTEGRADORA';
     case 'Operador':
       return 'OPERADOR';
+    case 'Leiloeiro':
+      return 'LEILOEIRO';
     case 'T\u00e9cnico':
     case 'Tecnico':
       return 'TECNICO';

@@ -1,6 +1,7 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CarbonCredit, CarbonProject, SustainablePractice } from '../types';
+import { hasTenantAccess, resolveTenantContext, withTenantFields } from './tenantContext';
 
 const practicesCollection = collection(db, 'sustainablePractices');
 const projectsCollection = collection(db, 'carbonProjects');
@@ -32,31 +33,50 @@ const toCredit = (id: string, raw: Record<string, unknown>): CarbonCredit => ({
 });
 export const carbonService = {
   async listPractices(): Promise<SustainablePractice[]> {
-    const snapshot = await getDocs(practicesCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(practicesCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toPractice(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: SustainablePractice, b: SustainablePractice) => a.name.localeCompare(b.name));
   },
 
   async listProjects(): Promise<CarbonProject[]> {
-    const snapshot = await getDocs(projectsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(projectsCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: CarbonProject, b: CarbonProject) => a.name.localeCompare(b.name));
   },
 
   async listCredits(): Promise<CarbonCredit[]> {
-    const snapshot = await getDocs(creditsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(creditsCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toCredit(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: CarbonCredit, b: CarbonCredit) => b.vintage - a.vintage);
   },
 
   async updateProjectStatus(projectId: string, status: CarbonProject['status']): Promise<void> {
-    await updateDoc(doc(db, 'carbonProjects', projectId), {
-      status,
-      updatedAt: serverTimestamp(),
-    });
+    const context = await resolveTenantContext();
+    const projectRef = doc(db, 'carbonProjects', projectId);
+    const snapshot = await getDoc(projectRef);
+    if (!snapshot.exists()) {
+      throw new Error('Projeto de carbono nao encontrado.');
+    }
+    if (!hasTenantAccess(snapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para atualizar projeto de outro tenant.');
+    }
+
+    await setDoc(
+      projectRef,
+      withTenantFields(
+        {
+          status,
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
+      { merge: true }
+    );
   },
 };
-

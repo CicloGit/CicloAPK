@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { OperationalActionType } from '../types';
+import { resolveTenantContext, withTenantFields } from './tenantContext';
 
 export interface OperationalActionPayload {
   projectId: string;
@@ -17,9 +18,16 @@ const actionsCollection = collection(db, 'operationalActions');
 
 export const operationalActionService = {
   async createAction(payload: OperationalActionPayload): Promise<void> {
-    await addDoc(actionsCollection, {
-      ...payload,
-      createdAt: serverTimestamp(),
-    });
+    const context = await resolveTenantContext();
+    await addDoc(
+      actionsCollection,
+      withTenantFields(
+        {
+          ...payload,
+          createdAt: serverTimestamp(),
+        },
+        context
+      )
+    );
   },
 };

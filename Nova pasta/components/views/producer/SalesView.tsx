@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ConsumerMarketChannel,
   InventoryItem,
   Pasture,
   ProducerAnimal,
   ProducerAnimalLot,
+  ProducerBuyerDocumentType,
   ProducerEscrowStatus,
   ProducerFiscalStatus,
   ProducerPdvSale,
@@ -14,6 +16,8 @@ import {
   SalesOfferStatus,
 } from '../../../types';
 import LoadingSpinner from '../../shared/LoadingSpinner';
+import CodeScannerField from '../../shared/CodeScannerField';
+import VoiceCommandPanel from '../../shared/VoiceCommandPanel';
 import TrashIcon from '../../icons/TrashIcon';
 import CheckCircleIcon from '../../icons/CheckCircleIcon';
 import { salesService } from '../../../services/salesService';
@@ -82,8 +86,19 @@ const parseNumberInput = (value: string): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizeVoiceText = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const UNITARY_SPECIES = new Set<ProducerAnimal['species']>(['BOVINO', 'SUINO', 'OVINO']);
+const GROUPED_SPECIES = new Set<ProducerAnimal['species']>(['AVE', 'PEIXE', 'OUTRO']);
+
 const SalesView: React.FC = () => {
   const { currentUser } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SalesTab>('PDV');
 
   const [offers, setOffers] = useState<SalesOffer[]>([]);
@@ -101,6 +116,7 @@ const SalesView: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [finalizingId, setFinalizingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -152,11 +168,53 @@ const SalesView: React.FC = () => {
     pastureId: '',
     distributionArea: '',
   });
+  const [groupLotForm, setGroupLotForm] = useState({
+    name: '',
+    category: '',
+    species: 'AVE' as ProducerAnimal['species'],
+    phase: '',
+    ageInDays: '',
+    headcount: '',
+    totalWeightKg: '',
+    pastureId: '',
+    distributionArea: '',
+  });
+  const [splitUnitLotForm, setSplitUnitLotForm] = useState({
+    sourceLotId: '',
+    newLotName: '',
+    newLotCategory: '',
+    separatedHeadcount: '',
+    pastureId: '',
+    distributionArea: '',
+  });
+  const [splitWeightLotForm, setSplitWeightLotForm] = useState({
+    sourceLotId: '',
+    newLotName: '',
+    newLotCategory: '',
+    separatedHeadcount: '',
+    separatedWeightKg: '',
+    phase: '',
+    ageInDays: '',
+    pastureId: '',
+    distributionArea: '',
+  });
+  const [isSplittingLot, setIsSplittingLot] = useState(false);
 
   const [pdvForm, setPdvForm] = useState<{
     sourceType: ProducerSaleSourceType;
     settlementMode: ProducerSaleSettlementMode;
-    buyer: string;
+    buyerName: string;
+    buyerDocumentType: ProducerBuyerDocumentType;
+    buyerDocumentNumber: string;
+    buyerStateRegistration: string;
+    buyerEmail: string;
+    buyerPhone: string;
+    buyerAddressStreet: string;
+    buyerAddressNumber: string;
+    buyerAddressDistrict: string;
+    buyerAddressCity: string;
+    buyerAddressState: string;
+    buyerAddressZipCode: string;
     description: string;
     unitPrice: string;
     lotId: string;
@@ -165,6 +223,8 @@ const SalesView: React.FC = () => {
     fieldPlot: string;
     cropWeightKg: string;
     boxes: string;
+    boxSize: string;
+    qualityGrade: string;
     assetItemId: string;
     saleAuthorizationCode: string;
     vehiclePlate: string;
@@ -174,7 +234,18 @@ const SalesView: React.FC = () => {
   }>({
     sourceType: 'ANIMAL_UNIT_LOT',
     settlementMode: 'DIRECT_SALE',
-    buyer: '',
+    buyerName: '',
+    buyerDocumentType: 'CPF',
+    buyerDocumentNumber: '',
+    buyerStateRegistration: '',
+    buyerEmail: '',
+    buyerPhone: '',
+    buyerAddressStreet: '',
+    buyerAddressNumber: '',
+    buyerAddressDistrict: '',
+    buyerAddressCity: '',
+    buyerAddressState: '',
+    buyerAddressZipCode: '',
     description: '',
     unitPrice: '',
     lotId: '',
@@ -183,6 +254,8 @@ const SalesView: React.FC = () => {
     fieldPlot: '',
     cropWeightKg: '',
     boxes: '',
+    boxSize: '',
+    qualityGrade: '',
     assetItemId: '',
     saleAuthorizationCode: '',
     vehiclePlate: '',
@@ -195,20 +268,48 @@ const SalesView: React.FC = () => {
   const [videoEvidence, setVideoEvidence] = useState<File | null>(null);
   const [authorizationEvidence, setAuthorizationEvidence] = useState<File | null>(null);
 
+  const operationalAnimals = useMemo(
+    () => animals.filter((animal) => (animal.lifecycleStatus ?? 'ACTIVE') !== 'CYCLE_CLOSED'),
+    [animals]
+  );
+
   const animalsByEarring = useMemo(() => {
     const map = new Map<string, ProducerAnimal>();
-    animals.forEach((animal) => map.set(animal.earringCode.trim().toUpperCase(), animal));
+    operationalAnimals.forEach((animal) => map.set(animal.earringCode.trim().toUpperCase(), animal));
     return map;
-  }, [animals]);
+  }, [operationalAnimals]);
 
   const selectedAnimals = useMemo(
-    () => animals.filter((animal) => selectedAnimalIds.includes(animal.id)),
-    [animals, selectedAnimalIds]
+    () => operationalAnimals.filter((animal) => selectedAnimalIds.includes(animal.id)),
+    [operationalAnimals, selectedAnimalIds]
+  );
+
+  const unitaryAnimalLots = useMemo(
+    () => animalLots.filter((lot) => lot.trackingMode !== 'WEIGHT'),
+    [animalLots]
+  );
+
+  const groupedAnimalLots = useMemo(
+    () => animalLots.filter((lot) => lot.trackingMode === 'WEIGHT'),
+    [animalLots]
   );
 
   const selectedLot = useMemo(
-    () => animalLots.find((lot) => lot.id === pdvForm.lotId) ?? null,
-    [animalLots, pdvForm.lotId]
+    () => unitaryAnimalLots.find((lot) => lot.id === pdvForm.lotId) ?? null,
+    [unitaryAnimalLots, pdvForm.lotId]
+  );
+
+  const selectedWeightLot = useMemo(
+    () => groupedAnimalLots.find((lot) => lot.id === pdvForm.lotId) ?? null,
+    [groupedAnimalLots, pdvForm.lotId]
+  );
+  const splitSourceUnitLot = useMemo(
+    () => unitaryAnimalLots.find((lot) => lot.id === splitUnitLotForm.sourceLotId) ?? null,
+    [splitUnitLotForm.sourceLotId, unitaryAnimalLots]
+  );
+  const splitSourceWeightLot = useMemo(
+    () => groupedAnimalLots.find((lot) => lot.id === splitWeightLotForm.sourceLotId) ?? null,
+    [groupedAnimalLots, splitWeightLotForm.sourceLotId]
   );
 
   const selectedAsset = useMemo(
@@ -217,13 +318,14 @@ const SalesView: React.FC = () => {
   );
 
   const actorLabel = currentUser?.name ? `${currentUser.name} (${currentUser.role})` : 'Produtor';
+  const toErrorMessage = (reason: unknown): string => (reason instanceof Error ? reason.message : 'erro desconhecido');
   const pastureNameById = (pastureId?: string): string => {
     if (!pastureId) return 'Nao informado';
     return pastures.find((pasture) => pasture.id === pastureId)?.name ?? pastureId;
   };
 
   const reloadAll = async () => {
-    const [loadedOffers, loadedPdvSales, loadedAnimals, loadedLots, workspace, inventory] = await Promise.all([
+    const [loadedOffers, loadedPdvSales, loadedAnimals, loadedLots, loadedWorkspace, loadedInventory] = await Promise.allSettled([
       salesService.listOffers(),
       salesService.listPdvSales(),
       producerOpsService.listAnimals(),
@@ -231,18 +333,69 @@ const SalesView: React.FC = () => {
       propertyService.loadWorkspace(),
       stockService.listInventory(),
     ]);
-    setOffers(loadedOffers);
-    setPdvSales(loadedPdvSales);
-    setAnimals(loadedAnimals);
-    setAnimalLots(loadedLots);
-    setPastures(workspace.pastures);
-    setAssetStock(inventory.filter((item) => item.category === 'Bem Patrimonial'));
+
+    const warnings: string[] = [];
+    let hasAnySuccess = false;
+
+    if (loadedOffers.status === 'fulfilled') {
+      setOffers(loadedOffers.value);
+      hasAnySuccess = true;
+    } else {
+      setOffers([]);
+      warnings.push(`Ofertas: ${toErrorMessage(loadedOffers.reason)}`);
+    }
+
+    if (loadedPdvSales.status === 'fulfilled') {
+      setPdvSales(loadedPdvSales.value);
+      hasAnySuccess = true;
+    } else {
+      setPdvSales([]);
+      warnings.push(`Vendas PDV: ${toErrorMessage(loadedPdvSales.reason)}`);
+    }
+
+    if (loadedAnimals.status === 'fulfilled') {
+      setAnimals(loadedAnimals.value);
+      hasAnySuccess = true;
+    } else {
+      setAnimals([]);
+      warnings.push(`Animais: ${toErrorMessage(loadedAnimals.reason)}`);
+    }
+
+    if (loadedLots.status === 'fulfilled') {
+      setAnimalLots(loadedLots.value);
+      hasAnySuccess = true;
+    } else {
+      setAnimalLots([]);
+      warnings.push(`Lotes: ${toErrorMessage(loadedLots.reason)}`);
+    }
+
+    if (loadedWorkspace.status === 'fulfilled') {
+      setPastures(loadedWorkspace.value.pastures);
+      hasAnySuccess = true;
+    } else {
+      setPastures([]);
+      warnings.push(`Propriedade: ${toErrorMessage(loadedWorkspace.reason)}`);
+    }
+
+    if (loadedInventory.status === 'fulfilled') {
+      setAssetStock(loadedInventory.value.filter((item) => item.category === 'Bem Patrimonial'));
+      hasAnySuccess = true;
+    } else {
+      setAssetStock([]);
+      warnings.push(`Estoque: ${toErrorMessage(loadedInventory.reason)}`);
+    }
+
+    setPartialWarnings(warnings);
+    if (!hasAnySuccess) {
+      throw new Error('Nenhuma fonte de comercial e vendas respondeu com sucesso.');
+    }
   };
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
       setLoadError(null);
+      setPartialWarnings([]);
       try {
         await reloadAll();
       } catch {
@@ -271,8 +424,8 @@ const SalesView: React.FC = () => {
       setActionError('Informe um preco valido para publicar a oferta.');
       return;
     }
-    if (newOffer.listingMode === 'AUCTION' && (!newOffer.auctionEndAt || !newOffer.minimumBid)) {
-      setActionError('Para leilao, informe data de encerramento e lance minimo.');
+    if (newOffer.listingMode === 'AUCTION' && !newOffer.minimumBid) {
+      setActionError('Para leilao, informe o lance minimo.');
       return;
     }
     if (newOffer.listingMode === 'AUCTION' && parseNumberInput(newOffer.minimumBid) <= 0) {
@@ -295,7 +448,11 @@ const SalesView: React.FC = () => {
         minimumBid: newOffer.listingMode === 'AUCTION' ? parseNumberInput(newOffer.minimumBid) : undefined,
       });
       setOffers((prev) => [created, ...prev]);
-      setActionMessage('Oferta publicada com sucesso.');
+      setActionMessage(
+        created.listingMode === 'AUCTION'
+          ? 'Oferta publica de leilao publicada com inicio as 19:00 e encerramento no 7o dia.'
+          : 'Oferta publicada com sucesso.'
+      );
       setNewOffer((prev) => ({
         ...prev,
         product: '',
@@ -334,8 +491,16 @@ const SalesView: React.FC = () => {
     event.preventDefault();
     setActionError(null);
     setActionMessage(null);
-    if (!animalForm.earringCode.trim() || !animalForm.category.trim()) {
-      setActionError('Informe brinco e categoria para cadastrar o animal.');
+    if (!animalForm.category.trim()) {
+      setActionError('Informe a categoria para cadastrar o animal.');
+      return;
+    }
+    if (GROUPED_SPECIES.has(animalForm.species)) {
+      setActionError('Aves, peixes e outros devem ser cadastrados por lote/peso/fase/idade na secao de lote agrupado.');
+      return;
+    }
+    if (!animalForm.earringCode.trim()) {
+      setActionError('Informe brinco/chip unitario para cadastrar o animal.');
       return;
     }
 
@@ -345,7 +510,7 @@ const SalesView: React.FC = () => {
         earringCode: animalForm.earringCode,
         species: animalForm.species,
         category: animalForm.category,
-        trackingMode: animalForm.trackingMode,
+        trackingMode: UNITARY_SPECIES.has(animalForm.species) ? 'UNIT' : animalForm.trackingMode,
         currentWeightKg: animalForm.currentWeightKg ? parseNumberInput(animalForm.currentWeightKg) : undefined,
         pastureId: animalForm.pastureId || undefined,
       });
@@ -374,6 +539,10 @@ const SalesView: React.FC = () => {
     const animal = animalsByEarring.get(normalized);
     if (!animal) {
       setActionError('Brinco nao encontrado no cadastro de animais.');
+      return;
+    }
+    if (!UNITARY_SPECIES.has(animal.species) || animal.trackingMode !== 'UNIT') {
+      setActionError('A leitura por brinco aceita somente gado/ovino/suino com rastreio unitario.');
       return;
     }
     if (!selectedAnimalIds.includes(animal.id)) {
@@ -425,11 +594,175 @@ const SalesView: React.FC = () => {
     }
   };
 
+  const handleCreateGroupedLot = async () => {
+    setActionError(null);
+    setActionMessage(null);
+    if (!groupLotForm.name.trim() || !groupLotForm.category.trim() || !groupLotForm.phase.trim()) {
+      setActionError('Informe nome, categoria e fase para cadastrar lote de aves/peixes/outros.');
+      return;
+    }
+
+    const headcount = parseNumberInput(groupLotForm.headcount);
+    const totalWeightKg = parseNumberInput(groupLotForm.totalWeightKg);
+    if (headcount <= 0 || totalWeightKg <= 0) {
+      setActionError('Informe quantidade e peso total validos para o lote agrupado.');
+      return;
+    }
+
+    setIsSubmittingLot(true);
+    try {
+      const created = await producerOpsService.createTrackedWeightLot({
+        name: groupLotForm.name,
+        category: groupLotForm.category,
+        species: groupLotForm.species,
+        phase: groupLotForm.phase,
+        ageInDays: groupLotForm.ageInDays ? parseNumberInput(groupLotForm.ageInDays) : undefined,
+        headcount,
+        totalWeightKg,
+        pastureId: groupLotForm.pastureId || undefined,
+        distributionArea: groupLotForm.distributionArea || undefined,
+      });
+      setAnimalLots((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setGroupLotForm((prev) => ({
+        ...prev,
+        name: '',
+        category: '',
+        phase: '',
+        ageInDays: '',
+        headcount: '',
+        totalWeightKg: '',
+        distributionArea: '',
+      }));
+      setActionMessage(`Lote agrupado ${created.name} cadastrado com rastreio por peso/fase/idade.`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Nao foi possivel cadastrar o lote agrupado.');
+    } finally {
+      setIsSubmittingLot(false);
+    }
+  };
+
+  const refreshAnimalRegistry = async () => {
+    const [loadedLots, loadedAnimals] = await Promise.all([
+      producerOpsService.listAnimalLots(),
+      producerOpsService.listAnimals(),
+    ]);
+    setAnimalLots(loadedLots);
+    setAnimals(loadedAnimals);
+  };
+
+  const handleSplitUnitLot = async () => {
+    setActionError(null);
+    setActionMessage(null);
+    const separatedHeadcount = parseNumberInput(splitUnitLotForm.separatedHeadcount);
+    if (!splitUnitLotForm.sourceLotId) {
+      setActionError('Selecione o lote unitario de origem para apartacao.');
+      return;
+    }
+    if (!splitUnitLotForm.newLotName.trim()) {
+      setActionError('Informe o nome do novo lote da apartacao.');
+      return;
+    }
+    if (separatedHeadcount <= 0) {
+      setActionError('Informe a quantidade de cabecas para apartacao.');
+      return;
+    }
+
+    setIsSplittingLot(true);
+    try {
+      const result = await producerOpsService.splitUnitAnimalLot({
+        sourceLotId: splitUnitLotForm.sourceLotId,
+        newLotName: splitUnitLotForm.newLotName,
+        newLotCategory: splitUnitLotForm.newLotCategory || undefined,
+        separatedHeadcount,
+        pastureId: splitUnitLotForm.pastureId || undefined,
+        distributionArea: splitUnitLotForm.distributionArea || undefined,
+      });
+      await refreshAnimalRegistry();
+      setSplitUnitLotForm((prev) => ({
+        ...prev,
+        newLotName: '',
+        newLotCategory: '',
+        separatedHeadcount: '',
+        distributionArea: '',
+      }));
+      setActionMessage(
+        `Apartacao concluida: ${result.createdLot.name} criado com ${result.createdLot.headcount} cabecas; ${result.sourceLot.name} ficou com ${result.sourceLot.headcount}.`
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Nao foi possivel apartar o lote unitario.');
+    } finally {
+      setIsSplittingLot(false);
+    }
+  };
+
+  const handleSplitWeightLot = async () => {
+    setActionError(null);
+    setActionMessage(null);
+    const separatedHeadcount = parseNumberInput(splitWeightLotForm.separatedHeadcount);
+    const separatedWeightKg = parseNumberInput(splitWeightLotForm.separatedWeightKg);
+    if (!splitWeightLotForm.sourceLotId) {
+      setActionError('Selecione o lote de peso/fase de origem para separacao.');
+      return;
+    }
+    if (!splitWeightLotForm.newLotName.trim()) {
+      setActionError('Informe o nome do novo lote separado.');
+      return;
+    }
+    if (separatedHeadcount <= 0 || separatedWeightKg <= 0) {
+      setActionError('Informe quantidade e peso validos para separar o lote.');
+      return;
+    }
+
+    setIsSplittingLot(true);
+    try {
+      const result = await producerOpsService.splitTrackedWeightLot({
+        sourceLotId: splitWeightLotForm.sourceLotId,
+        newLotName: splitWeightLotForm.newLotName,
+        newLotCategory: splitWeightLotForm.newLotCategory || undefined,
+        separatedHeadcount,
+        separatedWeightKg,
+        phase: splitWeightLotForm.phase || undefined,
+        ageInDays: splitWeightLotForm.ageInDays ? parseNumberInput(splitWeightLotForm.ageInDays) : undefined,
+        pastureId: splitWeightLotForm.pastureId || undefined,
+        distributionArea: splitWeightLotForm.distributionArea || undefined,
+      });
+      await refreshAnimalRegistry();
+      setSplitWeightLotForm((prev) => ({
+        ...prev,
+        newLotName: '',
+        newLotCategory: '',
+        separatedHeadcount: '',
+        separatedWeightKg: '',
+        phase: '',
+        ageInDays: '',
+        distributionArea: '',
+      }));
+      setActionMessage(
+        `Separacao por peso concluida: ${result.createdLot.name} criado com ${result.createdLot.totalWeightKg ?? 0} kg; ${result.sourceLot.name} ficou com ${result.sourceLot.totalWeightKg ?? 0} kg.`
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Nao foi possivel separar o lote por peso.');
+    } finally {
+      setIsSplittingLot(false);
+    }
+  };
+
   const resetPdvForm = () => {
     setPdvForm({
       sourceType: 'ANIMAL_UNIT_LOT',
       settlementMode: 'DIRECT_SALE',
-      buyer: '',
+      buyerName: '',
+      buyerDocumentType: 'CPF',
+      buyerDocumentNumber: '',
+      buyerStateRegistration: '',
+      buyerEmail: '',
+      buyerPhone: '',
+      buyerAddressStreet: '',
+      buyerAddressNumber: '',
+      buyerAddressDistrict: '',
+      buyerAddressCity: '',
+      buyerAddressState: '',
+      buyerAddressZipCode: '',
       description: '',
       unitPrice: '',
       lotId: '',
@@ -438,6 +771,8 @@ const SalesView: React.FC = () => {
       fieldPlot: '',
       cropWeightKg: '',
       boxes: '',
+      boxSize: '',
+      qualityGrade: '',
       assetItemId: '',
       saleAuthorizationCode: '',
       vehiclePlate: '',
@@ -471,7 +806,20 @@ const SalesView: React.FC = () => {
     const payload: Parameters<typeof salesService.createPdvSale>[0] = {
       sourceType: pdvForm.sourceType,
       settlementMode: pdvForm.settlementMode,
-      buyer: pdvForm.buyer,
+      buyerProfile: {
+        name: pdvForm.buyerName,
+        documentType: pdvForm.buyerDocumentType,
+        documentNumber: pdvForm.buyerDocumentNumber,
+        stateRegistration: pdvForm.buyerStateRegistration || undefined,
+        email: pdvForm.buyerEmail,
+        phone: pdvForm.buyerPhone,
+        addressStreet: pdvForm.buyerAddressStreet,
+        addressNumber: pdvForm.buyerAddressNumber,
+        addressDistrict: pdvForm.buyerAddressDistrict,
+        addressCity: pdvForm.buyerAddressCity,
+        addressState: pdvForm.buyerAddressState,
+        addressZipCode: pdvForm.buyerAddressZipCode,
+      },
       description: pdvForm.description,
       unitPrice,
       actor: actorLabel,
@@ -484,13 +832,16 @@ const SalesView: React.FC = () => {
       payload.headcount = selectedLot?.headcount ?? (pdvForm.headcount ? parseNumberInput(pdvForm.headcount) : undefined);
     }
     if (pdvForm.sourceType === 'ANIMAL_WEIGHT') {
-      payload.totalWeightKg = parseNumberInput(pdvForm.animalWeightKg);
-      payload.headcount = pdvForm.headcount ? parseNumberInput(pdvForm.headcount) : undefined;
+      payload.lotId = pdvForm.lotId || undefined;
+      payload.totalWeightKg = selectedWeightLot?.totalWeightKg ?? parseNumberInput(pdvForm.animalWeightKg);
+      payload.headcount = selectedWeightLot?.headcount ?? (pdvForm.headcount ? parseNumberInput(pdvForm.headcount) : undefined);
     }
     if (pdvForm.sourceType === 'CROP') {
       payload.fieldPlot = pdvForm.fieldPlot || undefined;
       payload.totalWeightKg = parseNumberInput(pdvForm.cropWeightKg);
       payload.boxes = parseNumberInput(pdvForm.boxes);
+      payload.boxSize = pdvForm.boxSize || undefined;
+      payload.qualityGrade = pdvForm.qualityGrade || undefined;
       payload.saleAuthorizationCode = pdvForm.saleAuthorizationCode || undefined;
       payload.vehiclePlate = pdvForm.vehiclePlate || undefined;
       payload.scaleQrCode = pdvForm.scaleQrCode || undefined;
@@ -608,6 +959,87 @@ const SalesView: React.FC = () => {
     }
   };
 
+  const handleVoiceCommand = (spokenCommand: string) => {
+    const normalized = normalizeVoiceText(spokenCommand);
+    if (!normalized) {
+      return;
+    }
+
+    const extractAfter = (token: string): string => {
+      const index = normalized.indexOf(token);
+      if (index < 0) return '';
+      return spokenCommand.slice(index + token.length).trim();
+    };
+
+    if (normalized.includes('aba pdv') || normalized.includes('abrir pdv')) {
+      setActiveTab('PDV');
+      setActionMessage('Comando de voz aplicado: aba PDV.');
+      return;
+    }
+    if (normalized.includes('aba animais') || normalized.includes('abrir animais')) {
+      navigate('/property-registration');
+      setActionMessage('Comando de voz aplicado: cadastro de animais redirecionado para Propriedade.');
+      return;
+    }
+    if (normalized.includes('aba ofertas') || normalized.includes('abrir ofertas')) {
+      setActiveTab('OFFERS');
+      setActionMessage('Comando de voz aplicado: aba Ofertas.');
+      return;
+    }
+
+    if (normalized.startsWith('comprador ')) {
+      const value = extractAfter('comprador ');
+      setPdvForm((prev) => ({ ...prev, buyerName: value }));
+      setActionMessage('Comando de voz aplicado: comprador preenchido.');
+      return;
+    }
+    if (normalized.startsWith('documento ')) {
+      const value = extractAfter('documento ');
+      setPdvForm((prev) => ({ ...prev, buyerDocumentNumber: value }));
+      setActionMessage('Comando de voz aplicado: documento preenchido.');
+      return;
+    }
+    if (normalized.startsWith('codigo qr ') || normalized.startsWith('qr ')) {
+      const value = normalized.startsWith('codigo qr ') ? extractAfter('codigo qr ') : extractAfter('qr ');
+      setPdvForm((prev) => ({ ...prev, qrCode: value }));
+      setActionMessage('Comando de voz aplicado: QR preenchido.');
+      return;
+    }
+    if (normalized.startsWith('placa ')) {
+      const value = extractAfter('placa ');
+      setPdvForm((prev) => ({ ...prev, vehiclePlate: value.toUpperCase() }));
+      setActionMessage('Comando de voz aplicado: placa preenchida.');
+      return;
+    }
+    if (normalized.startsWith('autorizacao ')) {
+      const value = extractAfter('autorizacao ');
+      setPdvForm((prev) => ({ ...prev, saleAuthorizationCode: value }));
+      setActionMessage('Comando de voz aplicado: autorizacao preenchida.');
+      return;
+    }
+    if (normalized.startsWith('preco ')) {
+      const value = extractAfter('preco ');
+      setPdvForm((prev) => ({ ...prev, unitPrice: value }));
+      setActionMessage('Comando de voz aplicado: preco preenchido.');
+      return;
+    }
+    if (normalized.startsWith('lote ')) {
+      const value = normalizeVoiceText(extractAfter('lote '));
+      const found =
+        unitaryAnimalLots.find((lot) => normalizeVoiceText(lot.name).includes(value)) ??
+        groupedAnimalLots.find((lot) => normalizeVoiceText(lot.name).includes(value));
+      if (found) {
+        setPdvForm((prev) => ({ ...prev, lotId: found.id }));
+        setActionMessage(`Comando de voz aplicado: lote ${found.name} selecionado.`);
+        return;
+      }
+    }
+
+    setActionError(
+      'Comando de voz nao reconhecido. Use exemplos como: "aba pdv", "comprador Joao", "codigo qr ABC123".'
+    );
+  };
+
   if (isLoading) {
     return <LoadingSpinner text="Carregando comercial e vendas..." />;
   }
@@ -622,6 +1054,17 @@ const SalesView: React.FC = () => {
       <p className="text-slate-600 mb-6">
         PDV fiscal com rastreio por brinco/lote, talhao/peso/caixas, bens patrimoniais e auditoria digital.
       </p>
+      <VoiceCommandPanel
+        className="mb-4"
+        onCommand={handleVoiceCommand}
+        hints={[
+          'aba pdv',
+          'abrir animais',
+          'comprador Joao Silva',
+          'codigo qr ABC123',
+          'preco 150,00',
+        ]}
+      />
       {actionMessage && (
         <div className="mb-4 p-3 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm">
           {actionMessage}
@@ -630,6 +1073,11 @@ const SalesView: React.FC = () => {
       {actionError && (
         <div className="mb-4 p-3 rounded-md border border-red-200 bg-red-50 text-red-700 text-sm">
           {actionError}
+        </div>
+      )}
+      {partialWarnings.length > 0 && (
+        <div className="mb-4 p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+          Carregamento parcial detectado: {partialWarnings.slice(0, 3).join(' | ')}
         </div>
       )}
       <div className="flex flex-wrap gap-2 bg-slate-200 p-1 rounded-lg mb-6 w-fit">
@@ -642,12 +1090,10 @@ const SalesView: React.FC = () => {
           PDV Fiscal
         </button>
         <button
-          onClick={() => setActiveTab('ANIMALS')}
-          className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-            activeTab === 'ANIMALS' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:bg-slate-300'
-          }`}
+          onClick={() => navigate('/property-registration')}
+          className="px-4 py-2 rounded-md text-sm font-semibold transition-colors text-slate-600 hover:bg-slate-300"
         >
-          Cadastro Animal
+          Cadastro Animal (Tela Propriedade)
         </button>
         <button
           onClick={() => setActiveTab('OFFERS')}
@@ -657,6 +1103,9 @@ const SalesView: React.FC = () => {
         >
           Ofertas Marketplace
         </button>
+      </div>
+      <div className="mb-6 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800">
+        Cadastro/gestao de animais e lotes ocorre somente na tela <strong>Cadastro e gestao da propriedade</strong> para manter separacao de finalidade.
       </div>
 
       {/* CONTENT INJECTIONS */}
@@ -676,6 +1125,8 @@ const SalesView: React.FC = () => {
                         sourceType: event.target.value as ProducerSaleSourceType,
                         lotId: '',
                         assetItemId: '',
+                        boxSize: '',
+                        qualityGrade: '',
                       }))
                     }
                     className="w-full p-2 border border-slate-300 rounded-md bg-white"
@@ -705,12 +1156,12 @@ const SalesView: React.FC = () => {
                 </label>
 
                 <label className="text-sm text-slate-600 space-y-1">
-                  <span>Comprador</span>
+                  <span>Nome / Razao social do comprador</span>
                   <input
-                    value={pdvForm.buyer}
-                    onChange={(event) => setPdvForm((prev) => ({ ...prev, buyer: event.target.value }))}
+                    value={pdvForm.buyerName}
+                    onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerName: event.target.value }))}
                     className="w-full p-2 border border-slate-300 rounded-md"
-                    placeholder="Nome do comprador"
+                    placeholder="Nome completo ou razao social"
                   />
                 </label>
 
@@ -735,6 +1186,121 @@ const SalesView: React.FC = () => {
                 />
               </label>
 
+              <div className="space-y-3 p-4 rounded-lg border border-slate-200 bg-slate-50">
+                <h4 className="font-semibold text-slate-800">Cadastro completo do comprador (obrigatorio para NF)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Documento</span>
+                    <select
+                      value={pdvForm.buyerDocumentType}
+                      onChange={(event) =>
+                        setPdvForm((prev) => ({
+                          ...prev,
+                          buyerDocumentType: event.target.value as ProducerBuyerDocumentType,
+                          buyerDocumentNumber: '',
+                        }))
+                      }
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                    >
+                      <option value="CPF">CPF</option>
+                      <option value="CNPJ">CNPJ</option>
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>{pdvForm.buyerDocumentType}</span>
+                    <input
+                      value={pdvForm.buyerDocumentNumber}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerDocumentNumber: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder={pdvForm.buyerDocumentType === 'CPF' ? '000.000.000-00' : '00.000.000/0000-00'}
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Inscricao estadual (opcional)</span>
+                    <input
+                      value={pdvForm.buyerStateRegistration}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerStateRegistration: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="IE ou ISENTO"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>E-mail</span>
+                    <input
+                      type="email"
+                      value={pdvForm.buyerEmail}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerEmail: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="comprador@dominio.com"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Telefone</span>
+                    <input
+                      value={pdvForm.buyerPhone}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerPhone: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>CEP</span>
+                    <input
+                      value={pdvForm.buyerAddressZipCode}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressZipCode: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="00000-000"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>UF</span>
+                    <input
+                      value={pdvForm.buyerAddressState}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressState: event.target.value.toUpperCase() }))}
+                      maxLength={2}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white uppercase"
+                      placeholder="SP"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Cidade</span>
+                    <input
+                      value={pdvForm.buyerAddressCity}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressCity: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="Cidade"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Bairro</span>
+                    <input
+                      value={pdvForm.buyerAddressDistrict}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressDistrict: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="Bairro"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1 md:col-span-2">
+                    <span>Logradouro</span>
+                    <input
+                      value={pdvForm.buyerAddressStreet}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressStreet: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="Rua, avenida, estrada"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-700 space-y-1">
+                    <span>Numero</span>
+                    <input
+                      value={pdvForm.buyerAddressNumber}
+                      onChange={(event) => setPdvForm((prev) => ({ ...prev, buyerAddressNumber: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      placeholder="Numero"
+                    />
+                  </label>
+                </div>
+              </div>
+
               {pdvForm.sourceType === 'ANIMAL_UNIT_LOT' && (
                 <div className="space-y-3 p-4 rounded-lg border border-emerald-200 bg-emerald-50">
                   <h4 className="font-semibold text-emerald-800">Venda de animal por brinco/lote</h4>
@@ -747,7 +1313,7 @@ const SalesView: React.FC = () => {
                         className="w-full p-2 border border-slate-300 rounded-md bg-white"
                       >
                         <option value="">Selecionar lote</option>
-                        {animalLots.map((lot) => (
+                        {unitaryAnimalLots.map((lot) => (
                           <option key={lot.id} value={lot.id}>
                             {lot.name} | cabecas: {lot.headcount}
                           </option>
@@ -755,7 +1321,7 @@ const SalesView: React.FC = () => {
                       </select>
                     </label>
                     <label className="text-sm text-slate-700 space-y-1">
-                      <span>Cabecas (fallback manual)</span>
+                      <span>Cabecas (ajuste manual opcional)</span>
                       <input
                         value={pdvForm.headcount}
                         onChange={(event) => setPdvForm((prev) => ({ ...prev, headcount: event.target.value }))}
@@ -778,6 +1344,21 @@ const SalesView: React.FC = () => {
                   <h4 className="font-semibold text-amber-800">Venda de animal por peso</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <label className="text-sm text-slate-700 space-y-1">
+                      <span>Lote agrupado (aves/peixes/outros)</span>
+                      <select
+                        value={pdvForm.lotId}
+                        onChange={(event) => setPdvForm((prev) => ({ ...prev, lotId: event.target.value }))}
+                        className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      >
+                        <option value="">Selecionar lote agrupado</option>
+                        {groupedAnimalLots.map((lot) => (
+                          <option key={lot.id} value={lot.id}>
+                            {lot.name} | fase: {lot.phase ?? '-'} | peso: {lot.totalWeightKg ?? 0} kg
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-sm text-slate-700 space-y-1">
                       <span>Peso total (kg)</span>
                       <input
                         value={pdvForm.animalWeightKg}
@@ -796,6 +1377,12 @@ const SalesView: React.FC = () => {
                       />
                     </label>
                   </div>
+                  {selectedWeightLot && (
+                    <p className="text-xs text-slate-700">
+                      Lote selecionado: {selectedWeightLot.name} | fase: {selectedWeightLot.phase ?? '-'} | idade:{' '}
+                      {selectedWeightLot.ageInDays ?? '-'} dias | peso total: {selectedWeightLot.totalWeightKg ?? 0} kg
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -837,14 +1424,43 @@ const SalesView: React.FC = () => {
                       />
                     </label>
                     <label className="text-sm text-slate-700 space-y-1">
-                      <span>QR da balanca</span>
-                      <input
-                        value={pdvForm.scaleQrCode}
-                        onChange={(event) => setPdvForm((prev) => ({ ...prev, scaleQrCode: event.target.value }))}
+                      <span>Tamanho das caixas</span>
+                      <select
+                        value={pdvForm.boxSize}
+                        onChange={(event) => setPdvForm((prev) => ({ ...prev, boxSize: event.target.value }))}
                         className="w-full p-2 border border-slate-300 rounded-md bg-white"
-                        placeholder="Codigo QR da pesagem"
-                      />
+                      >
+                        <option value="">Selecionar tamanho</option>
+                        <option value="P">Pequena (P)</option>
+                        <option value="M">Media (M)</option>
+                        <option value="G">Grande (G)</option>
+                        <option value="EXTRA">Extra</option>
+                        <option value="MISTA">Mista</option>
+                      </select>
                     </label>
+                    <label className="text-sm text-slate-700 space-y-1">
+                      <span>Qualidade</span>
+                      <select
+                        value={pdvForm.qualityGrade}
+                        onChange={(event) => setPdvForm((prev) => ({ ...prev, qualityGrade: event.target.value }))}
+                        className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                      >
+                        <option value="">Selecionar qualidade</option>
+                        <option value="A">Classe A</option>
+                        <option value="B">Classe B</option>
+                        <option value="C">Classe C</option>
+                        <option value="EXPORTACAO">Exportacao</option>
+                        <option value="INDUSTRIA">Industria</option>
+                      </select>
+                    </label>
+                    <CodeScannerField
+                      label="QR da balanca"
+                      mode="QR_ONLY"
+                      value={pdvForm.scaleQrCode}
+                      onChange={(nextValue) => setPdvForm((prev) => ({ ...prev, scaleQrCode: nextValue }))}
+                      placeholder="Codigo QR da pesagem"
+                      helperText="Use camera, leitura por imagem ou digitacao manual."
+                    />
                     <label className="text-sm text-slate-700 space-y-1">
                       <span>Veiculo</span>
                       <input
@@ -896,15 +1512,14 @@ const SalesView: React.FC = () => {
 
               <div className="space-y-3 p-4 rounded-lg border border-slate-200 bg-slate-50">
                 <h4 className="font-semibold text-slate-800">Evidencias digitais para auditoria</h4>
-                <label className="text-sm text-slate-700 space-y-1 block">
-                  <span>QR da operacao</span>
-                  <input
-                    value={pdvForm.qrCode}
-                    onChange={(event) => setPdvForm((prev) => ({ ...prev, qrCode: event.target.value }))}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-white"
-                    placeholder="Leitura QR para rastreabilidade"
-                  />
-                </label>
+                <CodeScannerField
+                  label="QR/codigo da operacao"
+                  mode="ANY"
+                  value={pdvForm.qrCode}
+                  onChange={(nextValue) => setPdvForm((prev) => ({ ...prev, qrCode: nextValue }))}
+                  placeholder="Leitura QR/codigo para rastreabilidade"
+                  helperText="Aceita QR, codigo de barras por camera/imagem ou digitacao manual."
+                />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <label className="text-sm text-slate-700 space-y-1">
                     <span>Foto</span>
@@ -1011,12 +1626,17 @@ const SalesView: React.FC = () => {
                         <p className="font-semibold text-slate-800">{sourceTypeLabel(sale.sourceType)}</p>
                         <p className="text-xs text-slate-500">{sale.buyer}</p>
                         <p className="text-xs text-slate-500">
+                          {sale.buyerProfile
+                            ? `${sale.buyerProfile.documentType}: ${sale.buyerProfile.documentNumber} | ${sale.buyerProfile.addressCity}/${sale.buyerProfile.addressState}`
+                            : 'Cadastro fiscal do comprador nao informado'}
+                        </p>
+                        <p className="text-xs text-slate-500">
                           {sale.sourceType === 'ANIMAL_UNIT_LOT' &&
                             `lote=${sale.lotId ?? '-'} | cabecas=${sale.headcount ?? sale.animalIds?.length ?? '-'}`}
                           {sale.sourceType === 'ANIMAL_WEIGHT' &&
                             `peso=${sale.totalWeightKg ?? 0}kg | cabecas=${sale.headcount ?? '-'}`}
                           {sale.sourceType === 'CROP' &&
-                            `talhao=${sale.fieldPlot ?? '-'} | peso=${sale.totalWeightKg ?? 0}kg | caixas=${sale.boxes ?? 0}`}
+                            `talhao=${sale.fieldPlot ?? '-'} | peso=${sale.totalWeightKg ?? 0}kg | caixas=${sale.boxes ?? 0} (${sale.boxSize ?? '-'}) | qualidade=${sale.qualityGrade ?? '-'}`}
                           {sale.sourceType === 'ASSET' && `bem=${sale.assetName ?? sale.assetItemId ?? '-'}`}
                         </p>
                       </td>
@@ -1077,7 +1697,7 @@ const SalesView: React.FC = () => {
             <form onSubmit={handleRegisterAnimal} className="bg-white rounded-lg shadow-md border border-slate-200 p-6 space-y-4">
               <h3 className="text-xl font-bold text-slate-800">Cadastro de animais separado do estoque</h3>
               <p className="text-sm text-slate-600">
-                Cada animal e rastreado por brinco e pode ser consolidado em lotes para distribuicao na propriedade.
+                Gado, ovinos e suinos usam brinco/chip unitario. Aves, peixes e outros usam cadastro por lote/peso/fase/idade.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="text-sm text-slate-600 space-y-1">
@@ -1087,15 +1707,22 @@ const SalesView: React.FC = () => {
                     onChange={(event) => setAnimalForm((prev) => ({ ...prev, earringCode: event.target.value }))}
                     className="w-full p-2 border border-slate-300 rounded-md"
                     placeholder="Ex: BR-001928"
+                    disabled={GROUPED_SPECIES.has(animalForm.species)}
                   />
                 </label>
                 <label className="text-sm text-slate-600 space-y-1">
                   <span>Especie</span>
                   <select
                     value={animalForm.species}
-                    onChange={(event) =>
-                      setAnimalForm((prev) => ({ ...prev, species: event.target.value as ProducerAnimal['species'] }))
-                    }
+                    onChange={(event) => {
+                      const nextSpecies = event.target.value as ProducerAnimal['species'];
+                      setAnimalForm((prev) => ({
+                        ...prev,
+                        species: nextSpecies,
+                        trackingMode: UNITARY_SPECIES.has(nextSpecies) ? 'UNIT' : 'WEIGHT',
+                        earringCode: GROUPED_SPECIES.has(nextSpecies) ? '' : prev.earringCode,
+                      }));
+                    }}
                     className="w-full p-2 border border-slate-300 rounded-md bg-white"
                   >
                     <option value="BOVINO">Bovino</option>
@@ -1103,6 +1730,8 @@ const SalesView: React.FC = () => {
                     <option value="OVINO">Ovino</option>
                     <option value="CAPRINO">Caprino</option>
                     <option value="EQUINO">Equino</option>
+                    <option value="AVE">Ave</option>
+                    <option value="PEIXE">Peixe</option>
                     <option value="OUTRO">Outro</option>
                   </select>
                 </label>
@@ -1123,6 +1752,7 @@ const SalesView: React.FC = () => {
                       setAnimalForm((prev) => ({ ...prev, trackingMode: event.target.value as ProducerAnimal['trackingMode'] }))
                     }
                     className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                    disabled={UNITARY_SPECIES.has(animalForm.species) || GROUPED_SPECIES.has(animalForm.species)}
                   >
                     <option value="UNIT">Unitario</option>
                     <option value="WEIGHT">Por peso</option>
@@ -1153,6 +1783,11 @@ const SalesView: React.FC = () => {
                   </select>
                 </label>
               </div>
+              {GROUPED_SPECIES.has(animalForm.species) && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  Para {animalForm.species.toLowerCase()}, use o formulario de lote agrupado ao lado.
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={isSubmittingAnimal}
@@ -1163,22 +1798,21 @@ const SalesView: React.FC = () => {
             </form>
 
             <div className="bg-white rounded-lg shadow-md border border-slate-200 p-6 space-y-4">
-              <h3 className="text-xl font-bold text-slate-800">Leitura de brinco e formacao de lote</h3>
-              <div className="flex gap-2">
-                <input
-                  value={earringScanInput}
-                  onChange={(event) => setEarringScanInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      handleReadEarring();
-                    }
-                  }}
-                  className="flex-1 p-2 border border-slate-300 rounded-md"
-                  placeholder="Digite/escaneie o brinco"
-                />
+              <h3 className="text-xl font-bold text-slate-800">Leitura de brinco e formacao de lote unitario</h3>
+              <p className="text-xs text-slate-600">
+                Esta etapa e exclusiva para gado/ovino/suino com brinco/chip.
+              </p>
+              <CodeScannerField
+                label="Leitura de brinco/chip"
+                mode="BARCODE_ONLY"
+                value={earringScanInput}
+                onChange={setEarringScanInput}
+                placeholder="Digite, escaneie pela camera ou envie imagem do codigo"
+                helperText="Apos leitura, clique em adicionar para formar o lote."
+              />
+              <div className="flex justify-end">
                 <button onClick={handleReadEarring} type="button" className="px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
-                  Ler brinco
+                  Adicionar brinco lido
                 </button>
               </div>
 
@@ -1247,6 +1881,310 @@ const SalesView: React.FC = () => {
               >
                 {isSubmittingLot ? 'Montando lote...' : 'Consolidar lote pelos brincos lidos'}
               </button>
+
+              <div className="border-t border-slate-200 pt-4 space-y-3">
+                <h4 className="font-semibold text-slate-800">Cadastro agrupado para aves, peixes e outros</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Especie</span>
+                    <select
+                      value={groupLotForm.species}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, species: event.target.value as ProducerAnimal['species'] }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                    >
+                      <option value="AVE">Ave</option>
+                      <option value="PEIXE">Peixe</option>
+                      <option value="OUTRO">Outro</option>
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Nome do lote</span>
+                    <input
+                      value={groupLotForm.name}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, name: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Categoria</span>
+                    <input
+                      value={groupLotForm.category}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, category: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Fase</span>
+                    <input
+                      value={groupLotForm.phase}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, phase: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                      placeholder="Ex: inicial, recria, finalizacao"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Idade (dias)</span>
+                    <input
+                      value={groupLotForm.ageInDays}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, ageInDays: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Quantidade</span>
+                    <input
+                      value={groupLotForm.headcount}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, headcount: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Peso total (kg)</span>
+                    <input
+                      value={groupLotForm.totalWeightKg}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, totalWeightKg: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Pasto/Talhao</span>
+                    <select
+                      value={groupLotForm.pastureId}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, pastureId: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                    >
+                      <option value="">Selecionar</option>
+                      {pastures.map((pasture) => (
+                        <option key={pasture.id} value={pasture.id}>
+                          {pasture.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-600 space-y-1">
+                    <span>Area de distribuicao</span>
+                    <input
+                      value={groupLotForm.distributionArea}
+                      onChange={(event) => setGroupLotForm((prev) => ({ ...prev, distributionArea: event.target.value }))}
+                      className="w-full p-2 border border-slate-300 rounded-md"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateGroupedLot()}
+                  disabled={isSubmittingLot}
+                  className="px-4 py-2 rounded-md bg-slate-800 text-white font-semibold hover:bg-slate-900 disabled:opacity-60"
+                >
+                  {isSubmittingLot ? 'Cadastrando lote...' : 'Cadastrar lote agrupado'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="bg-white rounded-lg shadow-md border border-slate-200 p-6 space-y-4">
+              <h3 className="text-xl font-bold text-slate-800">Apartacao de lote unitario</h3>
+              <p className="text-xs text-slate-600">
+                Separe parte de um lote unitario (gado/ovino/suino) para formar um novo lote com rastreio.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-sm text-slate-600 space-y-1 md:col-span-2">
+                  <span>Lote de origem</span>
+                  <select
+                    value={splitUnitLotForm.sourceLotId}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, sourceLotId: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                  >
+                    <option value="">Selecionar lote unitario</option>
+                    {unitaryAnimalLots
+                      .filter((lot) => lot.headcount > 1)
+                      .map((lot) => (
+                        <option key={lot.id} value={lot.id}>
+                          {lot.name} | cabecas: {lot.headcount}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Novo lote</span>
+                  <input
+                    value={splitUnitLotForm.newLotName}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, newLotName: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: Lote Apartado 01"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Categoria do novo lote</span>
+                  <input
+                    value={splitUnitLotForm.newLotCategory}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, newLotCategory: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: Recria"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Cabecas para apartar</span>
+                  <input
+                    value={splitUnitLotForm.separatedHeadcount}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, separatedHeadcount: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: 12"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Pasto/Talhao destino</span>
+                  <select
+                    value={splitUnitLotForm.pastureId}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, pastureId: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                  >
+                    <option value="">Selecionar</option>
+                    {pastures.map((pasture) => (
+                      <option key={pasture.id} value={pasture.id}>
+                        {pasture.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-600 space-y-1 md:col-span-2">
+                  <span>Area de distribuicao destino</span>
+                  <input
+                    value={splitUnitLotForm.distributionArea}
+                    onChange={(event) => setSplitUnitLotForm((prev) => ({ ...prev, distributionArea: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: Manga 5 / Corredor B"
+                  />
+                </label>
+              </div>
+              {splitSourceUnitLot && (
+                <p className="text-xs text-slate-600">
+                  Origem: {splitSourceUnitLot.name} | cabecas={splitSourceUnitLot.headcount} | peso total=
+                  {splitSourceUnitLot.totalWeightKg ?? 0} kg
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleSplitUnitLot()}
+                disabled={isSplittingLot}
+                className="px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {isSplittingLot ? 'Apartando...' : 'Apartar e formar novo lote'}
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md border border-slate-200 p-6 space-y-4">
+              <h3 className="text-xl font-bold text-slate-800">Separacao de lote por peso/fase</h3>
+              <p className="text-xs text-slate-600">
+                Para aves, peixes e outros: separar por quantidade e peso e gerar novo lote com fase/qualidade.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-sm text-slate-600 space-y-1 md:col-span-2">
+                  <span>Lote de origem (peso/fase)</span>
+                  <select
+                    value={splitWeightLotForm.sourceLotId}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, sourceLotId: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                  >
+                    <option value="">Selecionar lote por peso</option>
+                    {groupedAnimalLots
+                      .filter((lot) => lot.headcount > 1 && (lot.totalWeightKg ?? 0) > 0)
+                      .map((lot) => (
+                        <option key={lot.id} value={lot.id}>
+                          {lot.name} | fase: {lot.phase ?? '-'} | cabecas: {lot.headcount} | peso: {lot.totalWeightKg ?? 0} kg
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Novo lote</span>
+                  <input
+                    value={splitWeightLotForm.newLotName}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, newLotName: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: Lote Separado Fase 2"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Categoria do novo lote</span>
+                  <input
+                    value={splitWeightLotForm.newLotCategory}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, newLotCategory: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Cabecas separadas</span>
+                  <input
+                    value={splitWeightLotForm.separatedHeadcount}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, separatedHeadcount: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Peso separado (kg)</span>
+                  <input
+                    value={splitWeightLotForm.separatedWeightKg}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, separatedWeightKg: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Fase do novo lote</span>
+                  <input
+                    value={splitWeightLotForm.phase}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, phase: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                    placeholder="Ex: recria"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Idade (dias)</span>
+                  <input
+                    value={splitWeightLotForm.ageInDays}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, ageInDays: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                  />
+                </label>
+                <label className="text-sm text-slate-600 space-y-1">
+                  <span>Pasto/Talhao destino</span>
+                  <select
+                    value={splitWeightLotForm.pastureId}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, pastureId: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                  >
+                    <option value="">Selecionar</option>
+                    {pastures.map((pasture) => (
+                      <option key={pasture.id} value={pasture.id}>
+                        {pasture.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-600 space-y-1 md:col-span-2">
+                  <span>Area de distribuicao destino</span>
+                  <input
+                    value={splitWeightLotForm.distributionArea}
+                    onChange={(event) => setSplitWeightLotForm((prev) => ({ ...prev, distributionArea: event.target.value }))}
+                    className="w-full p-2 border border-slate-300 rounded-md"
+                  />
+                </label>
+              </div>
+              {splitSourceWeightLot && (
+                <p className="text-xs text-slate-600">
+                  Origem: {splitSourceWeightLot.name} | cabecas={splitSourceWeightLot.headcount} | peso=
+                  {splitSourceWeightLot.totalWeightKg ?? 0} kg | fase={splitSourceWeightLot.phase ?? '-'}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleSplitWeightLot()}
+                disabled={isSplittingLot}
+                className="px-4 py-2 rounded-md bg-slate-800 text-white font-semibold hover:bg-slate-900 disabled:opacity-60"
+              >
+                {isSplittingLot ? 'Separando...' : 'Separar e formar novo lote'}
+              </button>
             </div>
           </div>
 
@@ -1277,7 +2215,9 @@ const SalesView: React.FC = () => {
                       <tr key={lot.id} className="border-b last:border-b-0 hover:bg-slate-50">
                         <td className="px-4 py-3">
                           <p className="font-semibold text-slate-800">{lot.name}</p>
-                          <p className="text-xs text-slate-500">{lot.category}</p>
+                          <p className="text-xs text-slate-500">
+                            {lot.category} | {lot.trackingMode === 'WEIGHT' ? 'Peso/fase' : 'Unitario'}{lot.phase ? ` | fase=${lot.phase}` : ''}
+                          </p>
                         </td>
                         <td className="px-4 py-3">{lot.headcount}</td>
                         <td className="px-4 py-3">{lot.averageWeightKg.toFixed(2)} kg</td>
@@ -1402,13 +2342,16 @@ const SalesView: React.FC = () => {
             {newOffer.listingMode === 'AUCTION' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50">
                 <label className="text-sm text-slate-700 space-y-1">
-                  <span>Encerramento do leilao</span>
-                  <input name="auctionEndAt" type="datetime-local" value={newOffer.auctionEndAt} onChange={handleOfferInputChange} className="w-full p-2 border border-slate-300 rounded-md bg-white" />
+                  <span>Data base do leilao (opcional)</span>
+                  <input name="auctionEndAt" type="date" value={newOffer.auctionEndAt} onChange={handleOfferInputChange} className="w-full p-2 border border-slate-300 rounded-md bg-white" />
                 </label>
                 <label className="text-sm text-slate-700 space-y-1">
                   <span>Lance minimo (R$)</span>
                   <input name="minimumBid" value={newOffer.minimumBid} onChange={handleOfferInputChange} className="w-full p-2 border border-slate-300 rounded-md bg-white" placeholder="0,00" />
                 </label>
+                <p className="md:col-span-2 text-xs text-amber-800">
+                  Regra fixa: oferta publica inicia sempre as 19:00 e encerra automaticamente no 7o dia.
+                </p>
               </div>
             )}
 
@@ -1456,6 +2399,11 @@ const SalesView: React.FC = () => {
                       <td className="px-4 py-3 text-xs text-slate-600">
                         <p>{offer.listingMode === 'AUCTION' ? 'Leilao' : channelLabel(offer.channel)}</p>
                         <p>{modeLabel(offer.listingMode)}</p>
+                        {offer.listingMode === 'AUCTION' && (
+                          <p>
+                            Janela: {offer.auctionStartAt ?? '-'} ate {offer.auctionEndAt ?? '-'}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={offer.status} />

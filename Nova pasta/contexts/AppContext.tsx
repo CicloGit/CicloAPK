@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   fetchSignInMethodsForEmail,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { AccessProfileType, CouncilType, DocumentType, OperationalActionType, ProducerScopes, User } from '../types';
 import { auth, db } from '../config/firebase';
 import { authClaimsService, claimsRoleToUserRole, ResolvedAuthClaims } from '../services/authClaimsService';
@@ -18,6 +19,7 @@ import {
   SYSTEM_MANAGER_LOGIN,
   SYSTEM_MANAGER_PASSWORD,
 } from '../lib/profileAuth';
+import { operatorAccessService } from '../services/operatorAccessService';
 
 type FirebaseUser = NonNullable<typeof auth.currentUser>;
 
@@ -62,6 +64,7 @@ const ROLE_ALIASES: Record<string, User['role']> = {
   FORNECEDOR: 'Fornecedor',
   INTEGRADORA: 'Integradora',
   OPERADOR: 'Operador',
+  LEILOEIRO: 'Leiloeiro',
   GESTOR_DE_TRAFEGO: 'Gestor de Trafego',
   ADMINISTRADOR: 'Administrador',
 };
@@ -115,7 +118,7 @@ const mapAuthErrorMessage = (error: unknown): string => {
     case 'auth/invalid-credential':
       return 'Credenciais invalidas.';
     case 'auth/email-already-in-use':
-      return 'Ja existe um cadastro para este perfil.';
+      return 'Usuario ja cadastrado. Faca login com seu CPF/CNPJ ou inscricao.';
     case 'auth/weak-password':
       return 'Senha fraca. Use pelo menos 6 caracteres.';
     case 'auth/network-request-failed':
@@ -165,8 +168,50 @@ const normalizeText = (value: unknown): string | undefined => {
 const isSimulationOnlyRole = (_role: User['role']): boolean => false;
 const isSystemManagerMasterCredentials = (identifier: string, password: string): boolean =>
   identifier.trim().toLowerCase() === SYSTEM_MANAGER_LOGIN && password === SYSTEM_MANAGER_PASSWORD;
+const isOperatorBindingValid = (user: Pick<User, 'role' | 'linkedProducerId' | 'linkedPropertyId'>): boolean =>
+  user.role !== 'Operador' || (Boolean(user.linkedProducerId) && Boolean(user.linkedPropertyId));
+const enforceOperatorBinding = async (user: User): Promise<void> => {
+  if (isOperatorBindingValid(user)) {
+    return;
+  }
+
+  await signOut(auth).catch(() => undefined);
+  throw new Error(
+    'Acesso de operador bloqueado: esta conta nao esta vinculada a uma fazenda/produtor. Solicite autorizacao no Portal do Produtor.'
+  );
+};
 
 const userDocRef = (uid: string) => doc(db, 'users', uid);
+const usersCollection = collection(db, 'users');
+const normalizeStateRegistrationValue = (value: string): string =>
+  value
+    .trim()
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, '');
+
+const ensureUniqueRegistration = async (params: {
+  documentNumber?: string;
+  stateRegistration?: string;
+}): Promise<void> => {
+  const normalizedDocumentNumber = String(params.documentNumber ?? '').trim();
+  const normalizedStateRegistration = normalizeStateRegistrationValue(String(params.stateRegistration ?? ''));
+
+  if (normalizedDocumentNumber) {
+    const byDocumentSnapshot = await getDocs(query(usersCollection, where('documentNumber', '==', normalizedDocumentNumber)));
+    if (!byDocumentSnapshot.empty) {
+      throw new Error('Usuario ja cadastrado. Faca login.');
+    }
+  }
+
+  if (normalizedStateRegistration) {
+    const byStateRegistrationSnapshot = await getDocs(
+      query(usersCollection, where('stateRegistration', '==', normalizedStateRegistration))
+    );
+    if (!byStateRegistrationSnapshot.empty) {
+      throw new Error('Inscricao ja cadastrada. Faca login com o usuario existente.');
+    }
+  }
+};
 
 const ensureSystemManagerProfile = async (firebaseUser: FirebaseUser): Promise<void> => {
   await setDoc(
@@ -294,6 +339,12 @@ const buildUser = (
     name: profile.name ?? fallbackName,
     role: resolvedRole,
     tenantId: claims.tenantId ?? profile.tenantId ?? firebaseUser.uid,
+    linkedProducerId: normalizeText(profile.linkedProducerId),
+    linkedProducerName: normalizeText(profile.linkedProducerName),
+    linkedPropertyId: normalizeText(profile.linkedPropertyId),
+    linkedPropertyName: normalizeText(profile.linkedPropertyName),
+    operatorAuthorizationId: normalizeText(profile.operatorAuthorizationId),
+    operatorAuthorizedByUserId: normalizeText(profile.operatorAuthorizedByUserId),
     producerScopes,
     claimsRole: claims.role,
     profileType: normalizeProfileType(profile.profileType, resolvedRole),
@@ -338,6 +389,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       try {
         const hydrated = await hydrateCurrentUser(firebaseUser, true);
+        await enforceOperatorBinding(hydrated);
         if (mounted) {
           setCurrentUser(hydrated);
         }
@@ -398,6 +450,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await signOut(auth);
         throw new Error('Perfil selecionado nao corresponde ao cadastro informado.');
       }
+      await enforceOperatorBinding(hydrated);
 
       setCurrentUser(hydrated);
       setSelectedProductionId(null);
@@ -435,20 +488,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         councilType: payload.councilType,
         councilNumber: payload.councilNumber,
       });
+      const normalizedOperatorPropertyRegistration =
+        normalizedProfile.profileType === 'OPERADOR'
+          ? normalizeStateRegistrationValue(payload.stateRegistration ?? '')
+          : '';
+
+      await ensureUniqueRegistration({
+        documentNumber: normalizedProfile.documentNumber,
+        stateRegistration: payload.stateRegistration,
+      });
 
       const credentials = await createUserWithEmailAndPassword(auth, normalizedProfile.authEmail, payload.password);
       const role = normalizeRole(normalizedProfile.role);
+      let operatorAuthorization:
+        | {
+            authorizationId: string;
+            tenantId: string;
+            producerId: string;
+            producerName: string;
+            propertyId: string;
+            propertyName: string;
+            propertyRegistrationNumber: string;
+            authorizedByUserId: string;
+          }
+        | null = null;
+
+      if (normalizedProfile.profileType === 'OPERADOR') {
+        try {
+          operatorAuthorization = await operatorAccessService.consumeAuthorizationForCurrentUser(
+            normalizedProfile.documentNumber,
+            normalizedOperatorPropertyRegistration
+          );
+        } catch (authorizationError) {
+          await deleteUser(credentials.user).catch(() => undefined);
+          throw authorizationError;
+        }
+      }
+
       const profile: User = {
         uid: credentials.user.uid,
         email: normalizedProfile.authEmail,
-        tenantId: credentials.user.uid,
+        tenantId: operatorAuthorization?.tenantId ?? credentials.user.uid,
         name: normalizedProfile.displayName,
         role,
+        linkedProducerId: operatorAuthorization?.producerId,
+        linkedProducerName: operatorAuthorization?.producerName,
+        linkedPropertyId: operatorAuthorization?.propertyId,
+        linkedPropertyName: operatorAuthorization?.propertyName,
+        operatorAuthorizationId: operatorAuthorization?.authorizationId,
+        operatorAuthorizedByUserId: operatorAuthorization?.authorizedByUserId,
         producerScopes: { seedProducer: false },
         profileType: normalizedProfile.profileType,
         documentType: normalizedProfile.documentType,
         documentNumber: normalizedProfile.documentNumber,
-        stateRegistration: normalizedProfile.stateRegistration,
+        stateRegistration: normalizedProfile.stateRegistration || normalizedOperatorPropertyRegistration || undefined,
         specialty: normalizedProfile.specialty,
         councilType: normalizedProfile.councilType,
         councilNumber: normalizedProfile.councilNumber,
@@ -462,6 +555,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           role: profile.role,
           email: profile.email ?? null,
           tenantId: profile.tenantId,
+          linkedProducerId: profile.linkedProducerId ?? null,
+          linkedProducerName: profile.linkedProducerName ?? null,
+          linkedPropertyId: profile.linkedPropertyId ?? null,
+          linkedPropertyName: profile.linkedPropertyName ?? null,
+          operatorAuthorizationId: profile.operatorAuthorizationId ?? null,
+          operatorAuthorizedByUserId: profile.operatorAuthorizedByUserId ?? null,
           producerScopes: profile.producerScopes,
           profileType: profile.profileType ?? null,
           documentType: profile.documentType ?? null,
@@ -478,6 +577,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       );
 
       const hydrated = await hydrateCurrentUser(credentials.user, true);
+      await enforceOperatorBinding(hydrated);
       setCurrentUser(hydrated);
       setSelectedProductionId(null);
       setCurrentAction(null);

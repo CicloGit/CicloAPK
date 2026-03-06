@@ -25,6 +25,7 @@ const FieldOperationsView: React.FC = () => {
   const [areaEntries, setAreaEntries] = useState<ProducerExpense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadNotice, setLoadNotice] = useState<string | null>(null);
 
   const [areaForm, setAreaForm] = useState({
     pastureId: '',
@@ -39,21 +40,45 @@ const FieldOperationsView: React.FC = () => {
     const loadFieldOperations = async () => {
       setIsLoading(true);
       setLoadError(null);
+      setLoadNotice(null);
       try {
-        const [loadedTasks, loadedRequests, loadedDiary, workspace, loadedExpenses] = await Promise.all([
+        const [tasksResult, requestsResult, diaryResult, workspaceResult, expensesResult] = await Promise.allSettled([
           operatorService.listTasks(),
           operatorService.listRequests(),
           fieldOperationsService.listDiaryEntries(),
           propertyService.loadWorkspace(),
           producerOpsService.listExpenses(),
         ]);
+
+        const loadedTasks = tasksResult.status === 'fulfilled' ? tasksResult.value : [];
+        const loadedRequests = requestsResult.status === 'fulfilled' ? requestsResult.value : [];
+        const loadedDiary = diaryResult.status === 'fulfilled' ? diaryResult.value : [];
+        const workspace = workspaceResult.status === 'fulfilled' ? workspaceResult.value : null;
+        const loadedExpenses = expensesResult.status === 'fulfilled' ? expensesResult.value : [];
+
         setTasks(loadedTasks);
         setRequests(loadedRequests);
         setDiaryEntries(loadedDiary);
-        setPastures(workspace.pastures);
+        setPastures(workspace?.pastures ?? []);
         setAreaEntries(loadedExpenses.filter((expense) => expense.relatedPastureId));
-      } catch {
-        setLoadError('Nao foi possivel carregar o controle operacional.');
+
+        const failures = [tasksResult, requestsResult, diaryResult, workspaceResult, expensesResult].filter(
+          (result) => result.status === 'rejected'
+        );
+
+        if (failures.length === 5) {
+          const firstReason = failures[0]?.reason;
+          const detail = firstReason instanceof Error ? firstReason.message : '';
+          setLoadError(detail ? `Nao foi possivel carregar o controle operacional. ${detail}` : 'Nao foi possivel carregar o controle operacional.');
+          return;
+        }
+
+        if (failures.length > 0) {
+          setLoadNotice('Parte dos dados operacionais nao foi carregada agora. O modulo continua disponivel com os dados validos.');
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : '';
+        setLoadError(detail ? `Nao foi possivel carregar o controle operacional. ${detail}` : 'Nao foi possivel carregar o controle operacional.');
       } finally {
         setIsLoading(false);
       }
@@ -201,6 +226,7 @@ const FieldOperationsView: React.FC = () => {
       <p className="text-slate-600 mb-8">
         Validacao de tarefas, aprovacao de pedidos, diario dos operadores e historico por talhao/pasto.
       </p>
+      {loadNotice && <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">{loadNotice}</div>}
 
       <div className="flex flex-wrap gap-1 bg-slate-200 p-1 rounded-lg mb-6 w-fit">
         <button

@@ -42,13 +42,6 @@ service firebase.storage {
       );
     }
 
-    function isSeedProducer() {
-      return signedIn()
-        && claimRole() == 'PRODUCER'
-        && request.auth.token.producerScopes is map
-        && request.auth.token.producerScopes.seedProducer == true;
-    }
-
     function isProducerRole() {
       return claimRole() == 'PRODUCER' || currentRole() == 'Produtor';
     }

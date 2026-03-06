@@ -17,3 +17,26 @@ root.render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+const registerServiceWorker = async () => {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  if (import.meta.env.DEV) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    registrations.forEach((registration) => {
+      void registration.unregister();
+    });
+    return;
+  }
+
+  try {
+    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    console.info('[PWA] Service worker registrado.');
+  } catch (error) {
+    console.warn('[PWA] Falha ao registrar service worker.', error);
+  }
+};
+
+void registerServiceWorker();

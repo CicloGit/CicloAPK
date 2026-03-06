@@ -1,7 +1,8 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toEventsMatrixModules } from '../config/operationsCatalog';
 import { EventMatrixModule } from '../types';
+import { resolveTenantContext } from './tenantContext';
 
 const eventsMatrixCollection = collection(db, 'eventsMatrix');
 const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixModule => ({
@@ -22,7 +23,8 @@ const toEventModule = (id: string, raw: Record<string, unknown>): EventMatrixMod
 
 export const eventsMatrixService = {
   async listModules(): Promise<EventMatrixModule[]> {
-    const snapshot = await getDocs(eventsMatrixCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(eventsMatrixCollection, where('tenantId', '==', context.tenantId)));
     const remoteModules = snapshot.docs.map((docSnapshot: any) =>
       toEventModule(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
@@ -40,4 +42,3 @@ export const eventsMatrixService = {
     return Array.from(merged.values());
   },
 };
-

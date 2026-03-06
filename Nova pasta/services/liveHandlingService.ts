@@ -1,6 +1,7 @@
-﻿import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ProductionProject } from '../types';
+import { resolveTenantContext, withTenantFields } from './tenantContext';
 
 export interface LiveHandlingEntry {
   id: string;
@@ -36,20 +37,25 @@ const toProject = (id: string, raw: Record<string, unknown>): ProductionProject 
   limiteVigente: Number(raw.limiteVigente ?? 0),
   limiteUtilizado: Number(raw.limiteUtilizado ?? 0),
 });
+
 export const liveHandlingService = {
   async listProjects(): Promise<ProductionProject[]> {
-    const snapshot = await getDocs(liveContextCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(liveContextCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toProject(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listHistory(): Promise<LiveHandlingEntry[]> {
-    const snapshot = await getDocs(query(historyCollection, orderBy('createdAt', 'desc')));
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(historyCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+      .map((docSnapshot: any) => toHistory(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .sort((a: LiveHandlingEntry, b: LiveHandlingEntry) => b.time.localeCompare(a.time));
   },
 
   async createEntry(payload: Omit<LiveHandlingEntry, 'id' | 'time'>): Promise<LiveHandlingEntry> {
+    const context = await resolveTenantContext();
     const newEntry: LiveHandlingEntry = {
       id: `LIVE-${Date.now()}`,
       projectId: payload.projectId,
@@ -59,14 +65,19 @@ export const liveHandlingService = {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    await setDoc(doc(db, 'liveHandlingHistory', newEntry.id), {
-      ...newEntry,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(
+      doc(db, 'liveHandlingHistory', newEntry.id),
+      withTenantFields(
+        {
+          ...newEntry,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
+      { merge: true }
+    );
 
     return newEntry;
   },
 };
-
-

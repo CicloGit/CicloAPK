@@ -590,7 +590,7 @@ export const toDataDictionaryEntities = (): DataEntity[] => [
   },
   {
     name: 'tenants/{tenantId}/settlements',
-    description: 'Escrow/split por marcos UPCL com provider stub auditavel.',
+    description: 'Escrow/split por marcos UPCL com provider real e trilha auditavel.',
     fields: ['id', 'status', 'orderId', 'templateCode', 'escrowAmount', 'releases', 'splits'],
   },
   {

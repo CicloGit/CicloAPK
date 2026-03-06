@@ -1,6 +1,7 @@
-﻿import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ArchitectureNode } from '../types';
+import { resolveTenantContext } from './tenantContext';
 
 const architectureCollection = collection(db, 'architectureNodes');
 const toArchitectureNode = (id: string, raw: Record<string, unknown>): ArchitectureNode => ({
@@ -19,10 +20,10 @@ const toArchitectureNode = (id: string, raw: Record<string, unknown>): Architect
 
 export const architectureService = {
   async listNodes(): Promise<ArchitectureNode[]> {
-    const snapshot = await getDocs(architectureCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(architectureCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) =>
       toArchitectureNode(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
     );
   },
 };
-

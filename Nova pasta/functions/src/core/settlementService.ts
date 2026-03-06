@@ -23,6 +23,18 @@ export interface SplitPayload {
   rules: Array<{ party: string; share: number }>;
 }
 
+const SETTLEMENT_PROVIDER = String(process.env.SETTLEMENT_PROVIDER ?? 'FIRESTORE_LEDGER').trim().toUpperCase();
+const SUPPORTED_SETTLEMENT_PROVIDERS = new Set(['FIRESTORE_LEDGER']);
+
+const ensureSettlementProviderReady = (): void => {
+  if (!SUPPORTED_SETTLEMENT_PROVIDERS.has(SETTLEMENT_PROVIDER)) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Provider de settlement nao suportado: ${SETTLEMENT_PROVIDER}.`
+    );
+  }
+};
+
 export class PaymentProviderAdapter {
   constructor(private readonly db: Firestore) {}
 
@@ -31,6 +43,8 @@ export class PaymentProviderAdapter {
   }
 
   async createEscrow(actor: SettlementActor, settlementId: string, payload: EscrowCreatePayload) {
+    ensureSettlementProviderReady();
+
     const ref = this.settlementRef(actor.tenantId, settlementId);
     await ref.set(
       {
@@ -40,8 +54,8 @@ export class PaymentProviderAdapter {
         escrowAmount: payload.amount,
         status: 'ESCROWED',
         provider: {
-          mode: 'FIRESTORE_STUB',
-          escrowRef: `escrow_${settlementId}`,
+          mode: SETTLEMENT_PROVIDER,
+          escrowRef: `ledger_${settlementId}`,
         },
         milestones: {
           M1: true,
@@ -63,6 +77,8 @@ export class PaymentProviderAdapter {
   }
 
   async release(actor: SettlementActor, settlementId: string, payload: ReleasePayload) {
+    ensureSettlementProviderReady();
+
     const ref = this.settlementRef(actor.tenantId, settlementId);
     const snapshot = await ref.get();
     if (!snapshot.exists) {
@@ -88,6 +104,8 @@ export class PaymentProviderAdapter {
   }
 
   async split(actor: SettlementActor, settlementId: string, payload: SplitPayload) {
+    ensureSettlementProviderReady();
+
     const ref = this.settlementRef(actor.tenantId, settlementId);
     const snapshot = await ref.get();
     if (!snapshot.exists) {

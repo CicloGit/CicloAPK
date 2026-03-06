@@ -1,8 +1,9 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { backendApi } from './backendApi';
 import { parseDateToTimestamp } from './dateUtils';
 import { BankAccount, Expense, Receivable, Transaction } from '../types';
+import { hasTenantAccess, resolveTenantContext, withTenantFields } from './tenantContext';
 
 const accountCollection = collection(db, 'bankAccounts');
 const receivableCollection = collection(db, 'receivables');
@@ -70,49 +71,80 @@ const toTransaction = (id: string, raw: Record<string, unknown>): Transaction =>
 });
 export const financialService = {
   async listReceivables(): Promise<Receivable[]> {
-    const snapshot = await getDocs(receivableCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(receivableCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toReceivable(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, receivable: toReceivable(docSnapshot.id, raw) };
+      })
+      .filter((entry: { raw: Record<string, unknown> }) => hasTenantAccess(entry.raw, context))
+      .map((entry: { receivable: Receivable }) => entry.receivable)
       .sort((a: Receivable, b: Receivable) => parseDateToTimestamp(a.dueDate) - parseDateToTimestamp(b.dueDate));
   },
 
   async listExpenses(): Promise<Expense[]> {
-    const snapshot = await getDocs(expenseCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(expenseCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toExpense(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, expense: toExpense(docSnapshot.id, raw) };
+      })
+      .filter((entry: { raw: Record<string, unknown> }) => hasTenantAccess(entry.raw, context))
+      .map((entry: { expense: Expense }) => entry.expense)
       .sort((a: Expense, b: Expense) => parseDateToTimestamp(a.dueDate) - parseDateToTimestamp(b.dueDate));
   },
 
   async listBankAccounts(): Promise<BankAccount[]> {
-    const snapshot = await getDocs(accountCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(accountCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toBankAccount(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, account: toBankAccount(docSnapshot.id, raw) };
+      })
+      .filter((entry: { raw: Record<string, unknown> }) => hasTenantAccess(entry.raw, context))
+      .map((entry: { account: BankAccount }) => entry.account)
       .sort((a: BankAccount, b: BankAccount) => a.holderName.localeCompare(b.holderName));
   },
 
   async listTransactions(accountId?: string): Promise<Transaction[]> {
-    const snapshot = await getDocs(transactionCollection);
-    const allItems: Transaction[] = snapshot.docs.map((docSnapshot: any) =>
-      toTransaction(docSnapshot.id, docSnapshot.data() as Record<string, unknown>)
-    );
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(transactionCollection, where('tenantId', '==', context.tenantId)));
+    const allItems: Transaction[] = snapshot.docs
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, transaction: toTransaction(docSnapshot.id, raw) };
+      })
+      .filter((entry: { raw: Record<string, unknown> }) => hasTenantAccess(entry.raw, context))
+      .map((entry: { transaction: Transaction }) => entry.transaction);
 
     const filtered = accountId ? allItems.filter((item: Transaction) => item.accountId === accountId) : allItems;
     return filtered.sort((a: Transaction, b: Transaction) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
   async getReceivableById(receivableId: string): Promise<Receivable | null> {
+    const context = await resolveTenantContext();
     const snapshot = await getDoc(doc(db, 'receivables', receivableId));
     if (!snapshot.exists()) {
+      return null;
+    }
+    if (!hasTenantAccess(snapshot.data() as Record<string, unknown>, context)) {
       return null;
     }
     return toReceivable(snapshot.id, snapshot.data() as Record<string, unknown>);
   },
 
   async markReceivableAsLiquidated(receivableId: string): Promise<void> {
+    const context = await resolveTenantContext();
 
     const receivableSnapshot = await getDoc(doc(db, 'receivables', receivableId));
     if (receivableSnapshot.exists()) {
       const raw = receivableSnapshot.data() as Record<string, unknown>;
+      if (!hasTenantAccess(raw, context)) {
+        throw new Error('Sem permissao para liquidar recebivel de outro tenant.');
+      }
       const orderId = String(raw.marketOrderId ?? '').trim();
       const settlementId = String(raw.settlementId ?? '').trim();
       const amount = Number(raw.value ?? 0);
@@ -128,12 +160,18 @@ export const financialService = {
 
     await setDoc(
       doc(db, 'receivables', receivableId),
-      {
-        status: 'LIQUIDADO',
-        updatedAt: serverTimestamp(),
-      },
+      withTenantFields(
+        {
+          status: 'LIQUIDADO',
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
       { merge: true }
     );
   },
 };
+
+
+
 

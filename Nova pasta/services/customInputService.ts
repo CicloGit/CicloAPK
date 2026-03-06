@@ -1,12 +1,14 @@
-﻿import {
+import {
   addDoc,
   collection,
   getDocs,
   limit,
   query,
   serverTimestamp,
+  where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { resolveTenantContext, withTenantFields } from './tenantContext';
 
 export interface CustomInputPasture {
   id: string;
@@ -50,7 +52,8 @@ const EMPTY_FORMULA: CustomInputFormula = {
 };
 export const customInputService = {
   async listPastures(): Promise<CustomInputPasture[]> {
-    const snapshot = await getDocs(pastureCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(pastureCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) => ({
       id: docSnapshot.id,
       name: String((docSnapshot.data() as Record<string, unknown>).name ?? ''),
@@ -58,7 +61,8 @@ export const customInputService = {
   },
 
   async getFormula(): Promise<CustomInputFormula> {
-    const snapshot = await getDocs(query(formulasCollection, limit(1)));
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(formulasCollection, where('tenantId', '==', context.tenantId), limit(1)));
     if (snapshot.empty) {
       return EMPTY_FORMULA;
     }
@@ -77,11 +81,17 @@ export const customInputService = {
   },
 
   async submitRequest(payload: Omit<CustomInputRequest, 'id'>): Promise<void> {
-    await addDoc(requestsCollection, {
-      ...payload,
-      status: payload.status ?? 'REQUESTED',
-      createdAt: serverTimestamp(),
-    });
+    const context = await resolveTenantContext();
+    await addDoc(
+      requestsCollection,
+      withTenantFields(
+        {
+          ...payload,
+          status: payload.status ?? 'REQUESTED',
+          createdAt: serverTimestamp(),
+        },
+        context
+      )
+    );
   },
 };
-

@@ -4,18 +4,21 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuditChain } from '../lib/auditChain';
 import { parseDateToTimestamp } from './dateUtils';
+import { TenantContext, hasTenantAccess, resolveTenantContext, withTenantFields } from './tenantContext';
+import { auctioneerService } from './auctioneerService';
 import {
   AuditEvent,
+  ProducerBuyerDocumentType,
+  ProducerBuyerProfile,
   ConsumerMarketChannel,
   ProducerEscrowStatus,
   ProducerFiscalStatus,
@@ -30,6 +33,8 @@ import {
 const salesOfferCollection = collection(db, 'salesOffers');
 const producerPdvSalesCollection = collection(db, 'producerPdvSales');
 const auditCollection = collection(db, 'auditEvents');
+const AUCTION_START_HOUR = 19;
+const AUCTION_DURATION_DAYS = 7;
 
 const nowLabel = (): string => new Date().toLocaleString('pt-BR');
 const todayDateLabel = (): string => new Date().toLocaleDateString('pt-BR');
@@ -38,6 +43,49 @@ const generateFiscalDocumentNumber = (): string => {
   const year = new Date().getFullYear();
   const suffix = Date.now().toString().slice(-8);
   return `NF-${year}-${suffix}`;
+};
+const formatDateTimeLabel = (value?: string): string => {
+  if (!value) {
+    return '-';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString('pt-BR');
+};
+const withNineteenHour = (baseDate: Date): Date => {
+  const next = new Date(baseDate);
+  next.setHours(AUCTION_START_HOUR, 0, 0, 0);
+  return next;
+};
+const parseIsoCandidate = (value?: string): Date | null => {
+  if (!value?.trim()) {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+const computeOfferAuctionWindow = (requestedStart?: string): { auctionStartAt: string; auctionEndAt: string } => {
+  const now = new Date();
+  const requested = parseIsoCandidate(requestedStart);
+  let auctionStartAtDate: Date;
+
+  if (requested) {
+    auctionStartAtDate = withNineteenHour(requested);
+  } else {
+    const todayNineteen = withNineteenHour(now);
+    auctionStartAtDate =
+      now.getTime() <= todayNineteen.getTime()
+        ? todayNineteen
+        : withNineteenHour(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+  }
+
+  const auctionEndAtDate = new Date(auctionStartAtDate.getTime() + AUCTION_DURATION_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    auctionStartAt: auctionStartAtDate.toISOString(),
+    auctionEndAt: auctionEndAtDate.toISOString(),
+  };
 };
 
 const toSalesOffer = (id: string, raw: Record<string, unknown>): SalesOffer => ({
@@ -51,7 +99,10 @@ const toSalesOffer = (id: string, raw: Record<string, unknown>): SalesOffer => (
   offerType: (raw.offerType as SalesOffer['offerType']) ?? 'PRODUTO',
   description: raw.description ? String(raw.description) : undefined,
   location: raw.location ? String(raw.location) : undefined,
+  auctionStartAt: raw.auctionStartAt ? String(raw.auctionStartAt) : undefined,
   auctionEndAt: raw.auctionEndAt ? String(raw.auctionEndAt) : undefined,
+  auctionDurationDays:
+    raw.auctionDurationDays !== undefined && raw.auctionDurationDays !== null ? Number(raw.auctionDurationDays) : undefined,
   minimumBid: raw.minimumBid ? Number(raw.minimumBid) : undefined,
   status: (raw.status as SalesOffer['status']) ?? 'ATIVA',
   date: String(raw.date ?? todayDateLabel()),
@@ -83,6 +134,99 @@ const toSaleEvidence = (raw: unknown): ProducerSaleEvidence => {
     hash: value.hash ? String(value.hash) : undefined,
     notes: value.notes ? String(value.notes) : undefined,
   };
+};
+
+const onlyDigits = (value: string): string => value.replace(/\D/g, '');
+
+const normalizeBuyerDocumentType = (value: unknown): ProducerBuyerDocumentType => {
+  const normalized = String(value ?? '').trim().toUpperCase();
+  return normalized === 'CNPJ' ? 'CNPJ' : 'CPF';
+};
+
+const normalizeBuyerProfile = (raw: unknown): ProducerBuyerProfile | undefined => {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const value = raw as Record<string, unknown>;
+  const name = String(value.name ?? '').trim();
+  const documentType = normalizeBuyerDocumentType(value.documentType);
+  const documentNumber = onlyDigits(String(value.documentNumber ?? ''));
+  const stateRegistration = String(value.stateRegistration ?? '').trim();
+  const email = String(value.email ?? '').trim().toLowerCase();
+  const phone = String(value.phone ?? '').trim();
+  const addressStreet = String(value.addressStreet ?? '').trim();
+  const addressNumber = String(value.addressNumber ?? '').trim();
+  const addressDistrict = String(value.addressDistrict ?? '').trim();
+  const addressCity = String(value.addressCity ?? '').trim();
+  const addressState = String(value.addressState ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 2);
+  const addressZipCode = onlyDigits(String(value.addressZipCode ?? ''));
+
+  if (!name && !documentNumber) {
+    return undefined;
+  }
+
+  return {
+    name,
+    documentType,
+    documentNumber,
+    stateRegistration: stateRegistration || undefined,
+    email,
+    phone,
+    addressStreet,
+    addressNumber,
+    addressDistrict,
+    addressCity,
+    addressState,
+    addressZipCode,
+  };
+};
+
+const validateBuyerProfile = (profile: ProducerBuyerProfile | undefined): ProducerBuyerProfile => {
+  const normalized = normalizeBuyerProfile(profile);
+  if (!normalized) {
+    throw new Error('Cadastro completo do comprador e obrigatorio para emissao fiscal da NF.');
+  }
+
+  if (!normalized.name) {
+    throw new Error('Informe o nome/razao social do comprador.');
+  }
+  if (!normalized.documentNumber) {
+    throw new Error('Informe o CPF/CNPJ do comprador.');
+  }
+  if (!normalized.email) {
+    throw new Error('Informe o e-mail do comprador.');
+  }
+  if (!/\S+@\S+\.\S+/.test(normalized.email)) {
+    throw new Error('E-mail do comprador invalido.');
+  }
+  if (!normalized.phone) {
+    throw new Error('Informe o telefone do comprador.');
+  }
+  if (!normalized.addressStreet || !normalized.addressNumber || !normalized.addressDistrict) {
+    throw new Error('Informe logradouro, numero e bairro do comprador.');
+  }
+  if (!normalized.addressCity || normalized.addressState.length !== 2) {
+    throw new Error('Informe cidade e UF validas do comprador.');
+  }
+  if (normalized.addressZipCode.length !== 8) {
+    throw new Error('CEP do comprador invalido. Informe 8 digitos.');
+  }
+
+  const expectedDocumentLength = normalized.documentType === 'CPF' ? 11 : 14;
+  if (normalized.documentNumber.length !== expectedDocumentLength) {
+    throw new Error(
+      normalized.documentType === 'CPF'
+        ? 'CPF do comprador invalido. Informe 11 digitos.'
+        : 'CNPJ do comprador invalido. Informe 14 digitos.'
+    );
+  }
+
+  return normalized;
 };
 
 const normalizeSourceType = (value: unknown): ProducerSaleSourceType => {
@@ -120,6 +264,7 @@ const normalizeEscrowStatus = (value: unknown, fallbackFiscal?: ProducerFiscalSt
 const toPdvSale = (id: string, raw: Record<string, unknown>): ProducerPdvSale => {
   const fiscalStatus = normalizeFiscalStatus(raw.fiscalStatus);
   const totalValue = Number(raw.totalValue ?? 0);
+  const buyerProfile = normalizeBuyerProfile(raw.buyerProfile);
   return {
     id,
     createdAt: String(raw.createdAt ?? nowLabel()),
@@ -131,7 +276,8 @@ const toPdvSale = (id: string, raw: Record<string, unknown>): ProducerPdvSale =>
     escrowId: raw.escrowId ? String(raw.escrowId) : undefined,
     escrowCreatedAt: raw.escrowCreatedAt ? String(raw.escrowCreatedAt) : undefined,
     escrowReleasedAt: raw.escrowReleasedAt ? String(raw.escrowReleasedAt) : undefined,
-    buyer: String(raw.buyer ?? ''),
+    buyer: String(raw.buyer ?? buyerProfile?.name ?? ''),
+    buyerProfile,
     description: String(raw.description ?? ''),
     unitPrice: Number(raw.unitPrice ?? 0),
     totalValue,
@@ -142,6 +288,8 @@ const toPdvSale = (id: string, raw: Record<string, unknown>): ProducerPdvSale =>
     totalWeightKg: raw.totalWeightKg !== undefined && raw.totalWeightKg !== null ? Number(raw.totalWeightKg) : undefined,
     fieldPlot: raw.fieldPlot ? String(raw.fieldPlot) : undefined,
     boxes: raw.boxes !== undefined && raw.boxes !== null ? Number(raw.boxes) : undefined,
+    boxSize: raw.boxSize ? String(raw.boxSize) : undefined,
+    qualityGrade: raw.qualityGrade ? String(raw.qualityGrade) : undefined,
     assetItemId: raw.assetItemId ? String(raw.assetItemId) : undefined,
     assetName: raw.assetName ? String(raw.assetName) : undefined,
     saleAuthorizationCode: raw.saleAuthorizationCode ? String(raw.saleAuthorizationCode) : undefined,
@@ -168,13 +316,21 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
   proofUrl: raw.proofUrl ? String(raw.proofUrl) : undefined,
 });
 
-async function getLatestAuditEvent(): Promise<AuditEvent | null> {
-  const auditSnapshot = await getDocs(query(auditCollection, orderBy('createdAt', 'desc'), limit(1)));
+const toEventTimestamp = (event: AuditEvent): number => {
+  const parsed = new Date(event.timestamp).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+async function getLatestAuditEvent(context: TenantContext): Promise<AuditEvent | null> {
+  const auditSnapshot = await getDocs(query(auditCollection, where('tenantId', '==', context.tenantId)));
   if (auditSnapshot.empty) {
     return null;
   }
-  const docSnapshot = auditSnapshot.docs[0];
-  return toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
+
+  const events = auditSnapshot.docs
+    .map((docSnapshot: any) => toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+    .sort((a: AuditEvent, b: AuditEvent) => toEventTimestamp(b) - toEventTimestamp(a));
+  return events[0] ?? null;
 }
 
 async function appendAuditEvent(payload: {
@@ -183,7 +339,8 @@ async function appendAuditEvent(payload: {
   details: string;
   proofUrl?: string;
 }): Promise<AuditEvent> {
-  const latestAuditEvent = await getLatestAuditEvent();
+  const context = await resolveTenantContext();
+  const latestAuditEvent = await getLatestAuditEvent(context);
   const previousHash = latestAuditEvent ? latestAuditEvent.hash : '0'.repeat(64);
   const newAuditEvent = await AuditChain.createAuditEvent(
     {
@@ -199,21 +356,23 @@ async function appendAuditEvent(payload: {
 
   await setDoc(
     doc(db, 'auditEvents', newAuditEvent.id),
-    {
-      ...newAuditEvent,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
+    withTenantFields(
+      {
+        ...newAuditEvent,
+        immutable: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      context
+    ),
     { merge: true }
   );
 
   return newAuditEvent;
 }
 
-const assertPdvRules = (payload: CreatePdvSalePayload) => {
-  if (!payload.buyer.trim()) {
-    throw new Error('Informe o comprador para registrar a venda.');
-  }
+const assertPdvRules = (payload: CreatePdvSalePayload): ProducerBuyerProfile => {
+  const buyerProfile = validateBuyerProfile(payload.buyerProfile);
   if (!payload.description.trim()) {
     throw new Error('Informe a descricao comercial da operacao.');
   }
@@ -238,6 +397,12 @@ const assertPdvRules = (payload: CreatePdvSalePayload) => {
     if (!payload.fieldPlot?.trim() || !hasWeightOrBoxes) {
       throw new Error('Venda de plantacao exige talhao/pasto e peso ou caixas.');
     }
+    if ((payload.boxes ?? 0) > 0 && !payload.boxSize?.trim()) {
+      throw new Error('Informe o tamanho das caixas para venda por caixas.');
+    }
+    if (!payload.qualityGrade?.trim()) {
+      throw new Error('Informe a classificacao de qualidade do produto na venda de plantacao.');
+    }
     if (!payload.scaleQrCode?.trim() || !payload.vehiclePlate?.trim() || !payload.saleAuthorizationCode?.trim()) {
       throw new Error('Para graos/plantacao informe QR da balanca, veiculo e autorizacao de venda.');
     }
@@ -246,6 +411,8 @@ const assertPdvRules = (payload: CreatePdvSalePayload) => {
   if (payload.sourceType === 'ASSET' && !payload.assetItemId?.trim()) {
     throw new Error('Venda de bem patrimonial exige identificacao do item no estoque.');
   }
+
+  return buyerProfile;
 };
 
 const computeTotalValue = (payload: CreatePdvSalePayload): number => {
@@ -266,7 +433,7 @@ const computeTotalValue = (payload: CreatePdvSalePayload): number => {
 interface CreatePdvSalePayload {
   sourceType: ProducerSaleSourceType;
   settlementMode: ProducerSaleSettlementMode;
-  buyer: string;
+  buyerProfile: ProducerBuyerProfile;
   description: string;
   unitPrice: number;
   actor: string;
@@ -276,6 +443,8 @@ interface CreatePdvSalePayload {
   totalWeightKg?: number;
   fieldPlot?: string;
   boxes?: number;
+  boxSize?: string;
+  qualityGrade?: string;
   assetItemId?: string;
   assetName?: string;
   saleAuthorizationCode?: string;
@@ -287,9 +456,15 @@ interface CreatePdvSalePayload {
 
 export const salesService = {
   async listOffers(): Promise<SalesOffer[]> {
-    const snapshot = await getDocs(salesOfferCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(salesOfferCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
-      .map((docSnapshot: any) => toSalesOffer(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, offer: toSalesOffer(docSnapshot.id, raw) };
+      })
+      .filter((row: { raw: Record<string, unknown> }) => hasTenantAccess(row.raw, context))
+      .map((row: { offer: SalesOffer }) => row.offer)
       .sort((a: SalesOffer, b: SalesOffer) => parseDateToTimestamp(b.date) - parseDateToTimestamp(a.date));
   },
 
@@ -302,8 +477,10 @@ export const salesService = {
         >
       >
   ): Promise<SalesOffer> {
+    const context = await resolveTenantContext();
     const listingMode = data.listingMode ?? 'FIXED_PRICE';
     const inferredCategory = listingMode === 'AUCTION' ? 'AUCTION_P2P' : 'OUTPUTS_PRODUCER';
+    const auctionWindow = listingMode === 'AUCTION' ? computeOfferAuctionWindow(data.auctionEndAt) : null;
 
     const newOffer: SalesOffer = {
       id: `SO-${Date.now()}`,
@@ -316,14 +493,16 @@ export const salesService = {
       offerType: data.offerType ?? 'PRODUTO',
       description: data.description?.trim() || undefined,
       location: data.location?.trim() || undefined,
-      auctionEndAt: listingMode === 'AUCTION' ? data.auctionEndAt : undefined,
+      auctionStartAt: listingMode === 'AUCTION' ? auctionWindow?.auctionStartAt : undefined,
+      auctionEndAt: listingMode === 'AUCTION' ? auctionWindow?.auctionEndAt : undefined,
+      auctionDurationDays: listingMode === 'AUCTION' ? AUCTION_DURATION_DAYS : undefined,
       minimumBid: listingMode === 'AUCTION' ? data.minimumBid : undefined,
       status: 'ATIVA',
       date: todayDateLabel(),
     };
 
     await setDoc(doc(db, 'salesOffers', newOffer.id), {
-      ...newOffer,
+      ...withTenantFields(newOffer, context),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -332,20 +511,65 @@ export const salesService = {
   },
 
   async deleteOffer(offerId: string): Promise<void> {
+    const context = await resolveTenantContext();
+    const snapshot = await getDoc(doc(db, 'salesOffers', offerId));
+    if (!snapshot.exists()) {
+      return;
+    }
+    const raw = snapshot.data() as Record<string, unknown>;
+    if (!hasTenantAccess(raw, context)) {
+      throw new Error('Sem permissao para excluir oferta de outro tenant.');
+    }
     await deleteDoc(doc(db, 'salesOffers', offerId));
   },
 
   async listPdvSales(): Promise<ProducerPdvSale[]> {
-    const snapshot = await getDocs(query(producerPdvSalesCollection, orderBy('createdAtTs', 'desc')));
-    return snapshot.docs.map((docSnapshot: any) => toPdvSale(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(producerPdvSalesCollection, where('tenantId', '==', context.tenantId)));
+    return snapshot.docs
+      .map((docSnapshot: any) => {
+        const raw = docSnapshot.data() as Record<string, unknown>;
+        return { raw, sale: toPdvSale(docSnapshot.id, raw) };
+      })
+      .filter((row: { raw: Record<string, unknown> }) => hasTenantAccess(row.raw, context))
+      .map((row: { sale: ProducerPdvSale }) => row.sale)
+      .sort((a: ProducerPdvSale, b: ProducerPdvSale) => parseDateToTimestamp(b.createdAt) - parseDateToTimestamp(a.createdAt));
   },
 
   async createPdvSale(payload: CreatePdvSalePayload): Promise<ProducerPdvSale> {
-    assertPdvRules(payload);
+    const buyerProfile = assertPdvRules(payload);
+    const context = await resolveTenantContext();
+    const totalValue = computeTotalValue(payload);
+
+    if (payload.settlementMode === 'DIRECT_SALE' && payload.lotId?.trim()) {
+      const auctionLock = await auctioneerService.findActiveCommercialLockBySourceLotId(payload.lotId);
+      if (auctionLock) {
+        const estimatedPenaltyAmount = sanitizeNumber(totalValue * 0.1);
+        try {
+          await appendAuditEvent({
+            actor: payload.actor.trim() || 'Produtor',
+            action: 'PDV_AVULSA_BLOCKED_AUCTION_ACTIVE',
+            details: `Tentativa de venda avulsa bloqueada para lote ${payload.lotId}. Leilao ativo ate ${formatDateTimeLabel(
+              auctionLock.commercialLockActiveUntil || auctionLock.auctionEndAt
+            )}. Multa estimada: ${estimatedPenaltyAmount.toFixed(2)}.`,
+          });
+        } catch {
+          // no-op: bloqueio comercial deve seguir mesmo sem escrita de auditoria
+        }
+
+        throw new Error(
+          `Lote vinculado a leilao publico ativo ate ${formatDateTimeLabel(
+            auctionLock.commercialLockActiveUntil || auctionLock.auctionEndAt
+          )}. Venda avulsa bloqueada sob pena de multa estimada de ${new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          }).format(estimatedPenaltyAmount)}.`
+        );
+      }
+    }
 
     const shouldEmitFiscalNow = payload.settlementMode === 'DIRECT_SALE' && !payload.deferFiscalEmission;
     const shouldReleaseEscrowNow = payload.settlementMode === 'DIRECT_SALE' && !payload.deferFiscalEmission;
-    const totalValue = computeTotalValue(payload);
     const escrowId = `ESC-${Date.now()}`;
     const escrowCreatedAt = nowLabel();
     const escrowReleasedAt = shouldReleaseEscrowNow ? nowLabel() : undefined;
@@ -367,7 +591,8 @@ export const salesService = {
       escrowId,
       escrowCreatedAt,
       escrowReleasedAt,
-      buyer: payload.buyer.trim(),
+      buyer: buyerProfile.name,
+      buyerProfile,
       description: payload.description.trim(),
       unitPrice: sanitizeNumber(payload.unitPrice),
       totalValue,
@@ -378,6 +603,8 @@ export const salesService = {
       totalWeightKg: payload.totalWeightKg,
       fieldPlot: payload.fieldPlot?.trim() || undefined,
       boxes: payload.boxes,
+      boxSize: payload.boxSize?.trim() || undefined,
+      qualityGrade: payload.qualityGrade?.trim() || undefined,
       assetItemId: payload.assetItemId?.trim() || undefined,
       assetName: payload.assetName?.trim() || undefined,
       saleAuthorizationCode: payload.saleAuthorizationCode?.trim() || undefined,
@@ -391,18 +618,21 @@ export const salesService = {
 
     await setDoc(
       doc(db, 'producerPdvSales', newSale.id),
-      {
-        ...newSale,
-        createdAtTs: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
+      withTenantFields(
+        {
+          ...newSale,
+          createdAtTs: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
       { merge: true }
     );
 
     const saleRegisteredAudit = await appendAuditEvent({
       actor: newSale.actor,
       action: 'PDV_SALE_REGISTERED',
-      details: `${newSale.sourceType} | ${newSale.settlementMode} | comprador=${newSale.buyer} | valor=${newSale.totalValue.toFixed(2)}`,
+      details: `${newSale.sourceType} | ${newSale.settlementMode} | comprador=${newSale.buyer} (${buyerProfile.documentType}:${buyerProfile.documentNumber}) | valor=${newSale.totalValue.toFixed(2)}`,
     });
 
     const escrowCreatedAudit = await appendAuditEvent({
@@ -453,9 +683,13 @@ export const salesService = {
       actor: string;
     }
   ): Promise<ProducerPdvSale> {
+    const context = await resolveTenantContext();
     const saleSnapshot = await getDoc(doc(db, 'producerPdvSales', saleId));
     if (!saleSnapshot.exists()) {
       throw new Error('Venda PDV nao encontrada para anexar evidencia.');
+    }
+    if (!hasTenantAccess(saleSnapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para anexar evidencia nesta venda.');
     }
 
     const sale = toPdvSale(saleSnapshot.id, saleSnapshot.data() as Record<string, unknown>);
@@ -495,9 +729,13 @@ export const salesService = {
   },
 
   async finalizeAuctionAndIssueInvoice(saleId: string, actor: string): Promise<ProducerPdvSale> {
+    const context = await resolveTenantContext();
     const saleSnapshot = await getDoc(doc(db, 'producerPdvSales', saleId));
     if (!saleSnapshot.exists()) {
       throw new Error('Venda PDV nao encontrada para finalizar leilao.');
+    }
+    if (!hasTenantAccess(saleSnapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para finalizar venda de outro tenant.');
     }
 
     const sale = toPdvSale(saleSnapshot.id, saleSnapshot.data() as Record<string, unknown>);
@@ -552,9 +790,13 @@ export const salesService = {
   },
 
   async issuePendingFiscalDocument(saleId: string, actor: string): Promise<ProducerPdvSale> {
+    const context = await resolveTenantContext();
     const saleSnapshot = await getDoc(doc(db, 'producerPdvSales', saleId));
     if (!saleSnapshot.exists()) {
       throw new Error('Venda PDV nao encontrada para emissao pendente.');
+    }
+    if (!hasTenantAccess(saleSnapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para emitir NF desta venda.');
     }
 
     const sale = toPdvSale(saleSnapshot.id, saleSnapshot.data() as Record<string, unknown>);

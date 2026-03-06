@@ -14,16 +14,18 @@ import { operatorService } from '../../../services/operatorService';
 import { financialService } from '../../../services/financialService';
 import { fieldOperationsService } from '../../../services/fieldOperationsService';
 import { producerOpsService } from '../../../services/producerOpsService';
+import { useApp } from '../../../contexts/AppContext';
 
 const OperatorPortalView: React.FC = () => {
     const { addToast } = useToast();
+    const { currentUser } = useApp();
     const [activeTab, setActiveTab] = useState<'EXECUTION' | 'CLOCK' | 'DIARY' | 'REQUESTS' | 'WALLET'>('EXECUTION');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    
+
     // Execution State
     const [tasks, setTasks] = useState<OperatorTask[]>([]);
-    
+
     // Request State
     const [requestItem, setRequestItem] = useState('');
     const [requestQty, setRequestQty] = useState('');
@@ -44,9 +46,17 @@ const OperatorPortalView: React.FC = () => {
     const [accounts, setAccounts] = useState<BankAccount[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
 
+    const operatorName = currentUser?.name || 'Operador';
+    const operatorRole = currentUser?.role || 'Operador';
+    const linkedPropertyName = currentUser?.linkedPropertyName || 'Propriedade nao vinculada';
+    const linkedProducerName = currentUser?.linkedProducerName || 'Produtor nao informado';
+
     const operatorAccount = useMemo(() => {
-        return accounts.find((account) => account.userId === 'Operador') || accounts[0] || null;
-    }, [accounts]);
+        if (!currentUser?.uid) {
+            return null;
+        }
+        return accounts.find((account) => account.userId === currentUser.uid) || null;
+    }, [accounts, currentUser?.uid]);
 
     const accountTransactions = useMemo(() => {
         if (!operatorAccount) {
@@ -105,12 +115,13 @@ const OperatorPortalView: React.FC = () => {
             await producerOpsService.createActivity({
                 title: action === 'COMPLETED' ? 'Tarefa concluida pelo operador' : 'Tarefa rejeitada pelo operador',
                 details: `Task ${taskId}`,
-                actor: 'Operador',
+                actor: operatorName,
                 actorRole: 'OPERADOR',
             });
             addToast({ type: 'success', title: 'Tarefa Atualizada', message: `Status alterado para ${action === 'COMPLETED' ? 'Concluido' : 'Rejeitado'}.` });
-        } catch {
-            addToast({ type: 'error', title: 'Falha', message: 'Nao foi possivel atualizar a tarefa.' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Nao foi possivel atualizar a tarefa.';
+            addToast({ type: 'error', title: 'Falha', message });
         }
     };
 
@@ -124,20 +135,21 @@ const OperatorPortalView: React.FC = () => {
                 item: requestItem,
                 quantity: requestQty,
                 priority: requestPriority,
-                requester: 'Jose (Eu)',
+                requester: operatorName,
             });
             setMyRequests((prev) => [newReq, ...prev]);
             await producerOpsService.createActivity({
                 title: 'Solicitacao de compra criada',
                 details: `${requestItem} (${requestQty || 'sem quantidade'})`,
-                actor: 'Operador',
+                actor: operatorName,
                 actorRole: 'OPERADOR',
             });
             setRequestItem('');
             setRequestQty('');
             addToast({ type: 'success', title: 'Solicitacao Enviada', message: 'O pedido foi encaminhado para aprovacao do gestor.' });
-        } catch {
-            addToast({ type: 'error', title: 'Falha', message: 'Nao foi possivel enviar a solicitacao.' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Nao foi possivel enviar a solicitacao.';
+            addToast({ type: 'error', title: 'Falha', message });
         }
     };
 
@@ -162,9 +174,14 @@ const OperatorPortalView: React.FC = () => {
         }
         try {
             await fieldOperationsService.createDiaryEntry({
-                author: 'Jose',
+                author: operatorName,
                 role: 'Operador',
-                location: 'Campo',
+                location: linkedPropertyName,
+                propertyId: currentUser?.linkedPropertyId,
+                propertyName: linkedPropertyName,
+                producerId: currentUser?.linkedProducerId,
+                producerName: linkedProducerName,
+                operatorUserId: currentUser?.uid,
                 type: mediaAttached,
                 transcript: diaryNote.trim() || `Relato enviado com mídia ${mediaAttached}.`,
                 aiAction: mediaAttached === 'AUDIO' ? 'Transcricao pendente' : undefined,
@@ -172,14 +189,15 @@ const OperatorPortalView: React.FC = () => {
             await producerOpsService.createActivity({
                 title: 'Diario de campo enviado',
                 details: diaryNote.trim() || `Midia ${mediaAttached}`,
-                actor: 'Operador',
+                actor: operatorName,
                 actorRole: 'OPERADOR',
             });
             setMediaAttached(null);
             setDiaryNote('');
             addToast({ type: 'success', title: 'Diario Enviado', message: 'Relato salvo no banco de dados.' });
-        } catch {
-            addToast({ type: 'error', title: 'Falha no diario', message: 'Nao foi possivel salvar o relato de campo.' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Nao foi possivel salvar o relato de campo.';
+            addToast({ type: 'error', title: 'Falha no diario', message });
         }
     };
 
@@ -208,20 +226,28 @@ const OperatorPortalView: React.FC = () => {
         return <div className="p-6 bg-red-50 text-red-700 border border-red-200 rounded-lg">{loadError}</div>;
     }
 
+    if (currentUser?.role === 'Operador' && (!currentUser.linkedPropertyId || !currentUser.linkedProducerId)) {
+        return (
+            <div className="p-6 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg">
+                Operador sem vinculo ativo de fazenda/produtor. Solicite ao produtor responsavel o cadastro correto no portal de gestao.
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-md mx-auto bg-slate-100 min-h-screen pb-24 border-x border-slate-200 shadow-xl relative">
             {/* Header */}
             <div className="bg-slate-800 text-white p-6 pb-8 rounded-b-3xl shadow-lg sticky top-0 z-10">
                 <div className="flex justify-between items-center mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold">Ola, Jose</h2>
-                        <p className="text-slate-400 text-sm">Operador de Campo</p>
+                        <h2 className="text-2xl font-bold">Ola, {operatorName}</h2>
+                        <p className="text-slate-400 text-sm">{operatorRole} | {linkedPropertyName}</p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${clockStatus === 'WORKING' ? 'bg-green-500 text-white animate-pulse' : 'bg-slate-600 text-slate-300'}`}>
                         {clockStatus === 'WORKING' ? 'EM TURNO' : 'OFFLINE'}
                     </div>
                 </div>
-                
+
                 {/* Clock Summary */}
                 {clockStatus === 'WORKING' && (
                     <div className="bg-slate-700/50 rounded-xl p-3 flex justify-between items-center backdrop-blur-sm">
@@ -233,7 +259,7 @@ const OperatorPortalView: React.FC = () => {
 
             {/* Content Area */}
             <div className="p-4 -mt-4">
-                
+
                 {/* EXECUTION TAB */}
                 {activeTab === 'EXECUTION' && (
                     <div className="space-y-4 animate-fade-in">
@@ -254,7 +280,7 @@ const OperatorPortalView: React.FC = () => {
                                     <div className="flex justify-between items-center text-xs text-slate-400 font-mono mb-4">
                                         <span className="flex items-center"><MapIcon className="h-3 w-3 mr-1"/> {task.geolocation}</span>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => handleTaskAction(task.id, 'COMPLETED')}
                                         className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl shadow-md hover:bg-emerald-600 active:scale-95 transition-all"
                                     >
@@ -272,8 +298,8 @@ const OperatorPortalView: React.FC = () => {
                         <div className="bg-white p-8 rounded-3xl shadow-md mb-8">
                             <div className="text-6xl mb-4">OK</div>
                             <h3 className="text-2xl font-bold text-slate-800 mb-2">Registro de Ponto</h3>
-                            <p className="text-slate-500 mb-8">Seu turno e monitorado para calculo de pagamento.</p>
-                            
+                            <p className="text-slate-500 mb-8">Seu turno em {linkedPropertyName} e monitorado para calculo de pagamento.</p>
+
                             {clockStatus === 'IDLE' ? (
                                 <button onClick={() => handleClockAction('START')} className="w-full py-4 bg-emerald-500 text-white font-bold text-xl rounded-2xl shadow-lg hover:bg-emerald-600 active:scale-95 transition-all">
                                     Iniciar Turno
@@ -295,15 +321,15 @@ const OperatorPortalView: React.FC = () => {
                     <div className="animate-fade-in bg-white p-6 rounded-2xl shadow-sm">
                         <h3 className="text-lg font-bold text-slate-800 mb-4">Diario de Campo (Voz/Foto)</h3>
                         <p className="text-sm text-slate-500 mb-6">Registre ocorrencias, quebras ou observacoes. A IA transcrevera automaticamente.</p>
-                        
+
                         <div className="flex justify-center gap-6 mb-8">
-                            <button 
+                            <button
                                 onClick={toggleRecording}
                                 className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-indigo-100 text-indigo-600'}`}
                             >
                                 <MicrophoneIcon className={`h-8 w-8 ${isRecording ? 'text-white' : ''}`} />
                             </button>
-                            <button 
+                            <button
                                 onClick={handleDiaryPhoto}
                                 className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-lg"
                             >
@@ -328,7 +354,7 @@ const OperatorPortalView: React.FC = () => {
                             rows={3}
                         />
 
-                        <button 
+                        <button
                             onClick={sendDiaryEntry}
                             disabled={!mediaAttached}
                             className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
@@ -344,22 +370,22 @@ const OperatorPortalView: React.FC = () => {
                         <div className="bg-white p-6 rounded-2xl shadow-sm">
                             <h3 className="font-bold text-slate-800 mb-4">Nova Solicitacao</h3>
                             <div className="space-y-3">
-                                <input 
-                                    type="text" 
-                                    placeholder="O que voce precisa?" 
+                                <input
+                                    type="text"
+                                    placeholder="O que voce precisa?"
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
                                     value={requestItem}
                                     onChange={e => setRequestItem(e.target.value)}
                                 />
                                 <div className="flex gap-3">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Qtd" 
+                                    <input
+                                        type="text"
+                                        placeholder="Qtd"
                                         className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
                                         value={requestQty}
                                         onChange={e => setRequestQty(e.target.value)}
                                     />
-                                    <select 
+                                    <select
                                         className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
                                         value={requestPriority}
                                         onChange={e => setRequestPriority(e.target.value as OperatorRequest['priority'])}
@@ -369,7 +395,7 @@ const OperatorPortalView: React.FC = () => {
                                         <option value="HIGH">Alta</option>
                                     </select>
                                 </div>
-                                <button 
+                                <button
                                     onClick={handleSendRequest}
                                     className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 active:scale-95 transition-all"
                                 >
@@ -387,7 +413,7 @@ const OperatorPortalView: React.FC = () => {
                                         <p className="text-xs text-slate-500">{req.quantity} - {req.date}</p>
                                     </div>
                                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                                        req.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                                        req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
                                         req.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                                     }`}>
                                         {req.status}

@@ -1,7 +1,8 @@
-import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { parseDateToTimestamp } from './dateUtils';
 import { Contract } from '../types';
+import { hasTenantAccess, resolveTenantContext, withTenantFields } from './tenantContext';
 
 const contractsCollection = collection(db, 'contracts');
 
@@ -27,7 +28,8 @@ const toContract = (id: string, raw: Record<string, unknown>): Contract => ({
 
 export const contractsService = {
   async listContracts(): Promise<Contract[]> {
-    const snapshot = await getDocs(contractsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(contractsCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toContract(docSnapshot.id, docSnapshot.data() as Record<string, unknown>))
       .sort((a: Contract, b: Contract) => parseDateToTimestamp(a.deadline) - parseDateToTimestamp(b.deadline));
@@ -37,14 +39,27 @@ export const contractsService = {
     contractId: string,
     payload: { originalFileUrl: string; originalFileName: string; originalFileHash?: string }
   ): Promise<void> {
+    const context = await resolveTenantContext();
+    const contractRef = doc(db, 'contracts', contractId);
+    const snapshot = await getDoc(contractRef);
+    if (!snapshot.exists()) {
+      throw new Error('Contrato nao encontrado.');
+    }
+    if (!hasTenantAccess(snapshot.data() as Record<string, unknown>, context)) {
+      throw new Error('Sem permissao para anexar arquivo neste contrato.');
+    }
+
     await setDoc(
-      doc(db, 'contracts', contractId),
-      {
-        originalFileUrl: payload.originalFileUrl,
-        originalFileName: payload.originalFileName,
-        originalFileHash: payload.originalFileHash ?? null,
-        updatedAt: serverTimestamp(),
-      },
+      contractRef,
+      withTenantFields(
+        {
+          originalFileUrl: payload.originalFileUrl,
+          originalFileName: payload.originalFileName,
+          originalFileHash: payload.originalFileHash ?? null,
+          updatedAt: serverTimestamp(),
+        },
+        context
+      ),
       { merge: true }
     );
   },

@@ -10,6 +10,7 @@ import DocumentTextIcon from '../../icons/DocumentTextIcon';
 import { CubeIcon } from '../../icons/CubeIcon';
 import LockClosedIcon from '../../icons/LockClosedIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
+import OfflineBanner from '../../shared/OfflineBanner';
 import { useToast } from '../../../contexts/ToastContext';
 import { useApp } from '../../../contexts/AppContext';
 import { OperatorTask } from '../../../types';
@@ -96,6 +97,7 @@ const MobileAppView: React.FC = () => {
 
             {/* --- SCROLLABLE CONTENT --- */}
             <main className="flex-1 overflow-y-auto pb-24 p-4 space-y-6">
+                <OfflineBanner />
                 {activeTab === 'HOME' && (
                     <div className="animate-fade-in space-y-6">
                         <div className="grid grid-cols-2 gap-3">

@@ -29,6 +29,7 @@ import { propertyService } from '../../services/propertyService';
 import { producerDashboardService } from '../../services/producerDashboardService';
 import { operatorService } from '../../services/operatorService';
 import { useToast } from '../../contexts/ToastContext';
+import { getActivityAutomationProfile } from '../../config/activityProfiles';
 
 const ProjectIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className || 'h-6 w-6'} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -62,29 +63,69 @@ const SHORTCUTS: ShortcutItem[] = [
 ];
 
 const getSectorConfig = (sector: ProductionSector) => {
-  if (sector === 'Agricultura') {
+  const profile = getActivityAutomationProfile(sector);
+  if (sector === 'Agricultura' || sector === 'Hortifruti' || sector === 'Fruticultura' || sector === 'Silvicultura') {
     return {
       icon: 'AG',
       quickActions: [
         { id: 'registerPlanting', label: 'Registrar plantio' },
         { id: 'sellCrop', label: 'Vender safra' },
       ],
-      summaryTitle: 'Resumo da lavoura',
+      summaryTitle: `Resumo de ${profile.lotLabel.toLowerCase()}`,
+    };
+  }
+
+  if (sector === 'Piscicultura') {
+    return {
+      icon: 'PS',
+      quickActions: [
+        { id: 'waterAnalysis', label: 'Registrar qualidade da agua' },
+        { id: 'registerWeight', label: 'Registrar biometria' },
+      ],
+      summaryTitle: 'Resumo da piscicultura',
+    };
+  }
+
+  if (sector === 'Suinocultura') {
+    return {
+      icon: 'SN',
+      quickActions: [
+        { id: 'applyHealthProtocol', label: 'Aplicar protocolo sanitario' },
+        { id: 'registerWeight', label: 'Registrar ganho de peso' },
+      ],
+      summaryTitle: 'Resumo da suinocultura',
     };
   }
 
   if (sector.toLowerCase().includes('bovinos')) {
     return {
-      icon: 'PC',
+      icon: 'BV',
       quickActions: [
         { id: 'registerAnimal', label: 'Registrar animal' },
         { id: 'sellBatch', label: 'Vender lote' },
       ],
-      summaryTitle: 'Resumo do rebanho',
+      summaryTitle: 'Resumo da bovinocultura',
     };
   }
 
-  return { icon: 'PR', quickActions: [], summaryTitle: 'Resumo da producao' };
+  if (sector === 'Avicultura') {
+    return {
+      icon: 'AV',
+      quickActions: [
+        { id: 'dailyCollection', label: 'Registrar coleta diaria' },
+        { id: 'applyHealthProtocol', label: 'Aplicar protocolo sanitario' },
+      ],
+      summaryTitle: 'Resumo da avicultura',
+    };
+  }
+
+  return {
+    icon: 'PR',
+    quickActions: [
+      { id: 'registerWeight', label: `Registrar ${profile.averageMeasureLabel.toLowerCase()}` },
+    ],
+    summaryTitle: `Resumo de ${profile.key.toLowerCase()}`,
+  };
 };
 
 const DashboardSkeleton: React.FC = () => (

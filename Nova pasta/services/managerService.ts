@@ -1,5 +1,6 @@
-﻿import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { resolveTenantContext } from './tenantContext';
 
 export interface ManagerKpi {
   id: string;
@@ -35,17 +36,18 @@ const toActivity = (id: string, raw: Record<string, unknown>): ManagerActivity =
 });
 export const managerService = {
   async listKpis(): Promise<ManagerKpi[]> {
-    const snapshot = await getDocs(kpiCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(kpiCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toKpi(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async listActivities(): Promise<ManagerActivity[]> {
-    const snapshot = await getDocs(activityCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(activityCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs
       .map((docSnapshot: any) => toActivity(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 };
-
 
 

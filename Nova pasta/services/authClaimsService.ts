@@ -1,9 +1,9 @@
 import { getIdTokenResult } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { ClaimsRole, ProducerScopes, User } from '../types';
+import { ClaimsRole, ProducerScopes, User as AppUser } from '../types';
 
-type FirebaseUser = { uid: string };
+type FirebaseUser = Parameters<typeof getIdTokenResult>[0] & { uid: string };
 
 export interface ResolveClaimsOptions {
   forceRefresh?: boolean;
@@ -24,6 +24,8 @@ const ROLE_ALIASES: Record<string, ClaimsRole> = {
   FORNECEDOR: 'SUPPLIER',
   INTEGRATOR: 'INTEGRATOR',
   INTEGRADORA: 'INTEGRATOR',
+  AUCTIONEER: 'AUCTIONEER',
+  LEILOEIRO: 'AUCTIONEER',
   TECHNICIAN: 'TECHNICIAN',
   TECNICO: 'TECHNICIAN',
   INVESTOR: 'INVESTOR',
@@ -70,7 +72,7 @@ const mergeProducerScopes = (primary: ProducerScopes, fallback: ProducerScopes):
 
 const profileRoleToClaimsRole = (role: unknown): ClaimsRole | null => normalizeClaimsRole(role);
 
-export const claimsRoleToUserRole = (role: ClaimsRole | null | undefined): User['role'] | null => {
+export const claimsRoleToUserRole = (role: ClaimsRole | null | undefined): AppUser['role'] | null => {
   switch (role) {
     case 'PRODUCER':
       return 'Produtor';
@@ -78,6 +80,8 @@ export const claimsRoleToUserRole = (role: ClaimsRole | null | undefined): User[
       return 'Fornecedor';
     case 'INTEGRATOR':
       return 'Integradora';
+    case 'AUCTIONEER':
+      return 'Leiloeiro';
     case 'TECHNICIAN':
       return 'Técnico';
     case 'INVESTOR':

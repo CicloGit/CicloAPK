@@ -5,11 +5,22 @@ import TrendingUpIcon from '../../icons/TrendingUpIcon';
 import { CashIcon } from '../../icons/CashIcon';
 import CalculatorIcon from '../../icons/CalculatorIcon';
 import LoadingSpinner from '../../shared/LoadingSpinner';
-import { MarketTrend, ProducerApplicationArea, ProducerInputType, ProducerTargetSpecies, Property } from '../../../types';
-import { reportsService, ConsumptionReportRow, CapacityReport } from '../../../services/reportsService';
+import {
+    MarketTrend,
+    ProducerAnimal,
+    ProducerApplicationArea,
+    ProducerInput,
+    ProducerInputType,
+    ProducerTargetSpecies,
+    ProductionProject,
+    Property,
+} from '../../../types';
+import { reportsService, ConsumptionReportRow, CapacityReport, LotAuditReading } from '../../../services/reportsService';
 import { producerOpsService } from '../../../services/producerOpsService';
 import { propertyService } from '../../../services/propertyService';
 import { useToast } from '../../../contexts/ToastContext';
+import { useApp } from '../../../contexts/AppContext';
+import { getActivityAutomationProfile } from '../../../config/activityProfiles';
 
 const INPUT_TYPE_LABELS: Record<ProducerInputType, string> = {
     ADUBO: 'Adubo',
@@ -37,6 +48,7 @@ const SPECIES_LABELS: Record<ProducerTargetSpecies, string> = {
     OVINOS: 'Ovinos',
     CAPRINOS: 'Caprinos',
     EQUINOS: 'Equinos',
+    PEIXES: 'Peixes',
 };
 
 const SPECIES_REQUIRED_TYPES = new Set<ProducerInputType>(['RACAO', 'SAL_MINERAL', 'MEDICAMENTO']);
@@ -53,8 +65,9 @@ const DEFAULT_AREA_BY_TYPE: Record<ProducerInputType, ProducerApplicationArea> =
 
 const ReportsView: React.FC = () => {
     const { addToast } = useToast();
+    const { selectedProductionId, currentUser } = useApp();
     const [activeReport, setActiveReport] = useState<'CONSUMPTION' | 'CAPACITY' | 'MARGIN' | 'REGISTRY'>('CONSUMPTION');
-    const [selectedBatch, setSelectedBatch] = useState('Lote A - Recria');
+    const [selectedLotId, setSelectedLotId] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
@@ -69,18 +82,20 @@ const ReportsView: React.FC = () => {
     });
 
     const [propertyData, setPropertyData] = useState<Property | null>(null);
+    const [activities, setActivities] = useState<ProductionProject[]>([]);
+    const [animals, setAnimals] = useState<ProducerAnimal[]>([]);
+    const [plots, setPlots] = useState<Array<{ id: string; name: string }>>([]);
     const [lots, setLots] = useState<Array<{ id: string; name: string; category: string; headcount: number; averageWeightKg: number }>>([]);
-    const [inputs, setInputs] = useState<Array<{
-        id: string;
-        name: string;
-        inputType: ProducerInputType;
-        applicationArea: ProducerApplicationArea;
-        targetSpecies: ProducerTargetSpecies[];
-        unit: string;
-        unitCost: number;
-        stock: number;
-    }>>([]);
+    const [inputs, setInputs] = useState<ProducerInput[]>([]);
     const [expenses, setExpenses] = useState<Array<{ id: string; description: string; amount: number; category: string; date: string }>>([]);
+
+    const [lotAudits, setLotAudits] = useState<LotAuditReading[]>([]);
+    const [auditForm, setAuditForm] = useState({
+        checkedHeadcount: '',
+        checkedWeightKg: '',
+        evidenceReference: '',
+        notes: '',
+    });
 
     const [newLot, setNewLot] = useState({ name: '', category: '', headcount: '', averageWeightKg: '' });
     const [newInput, setNewInput] = useState<{
@@ -88,6 +103,10 @@ const ReportsView: React.FC = () => {
         inputType: ProducerInputType;
         applicationArea: ProducerApplicationArea;
         targetSpecies: ProducerTargetSpecies[];
+        launchLinkType: 'GERAL' | 'ANIMAL' | 'LOTE' | 'TALHAO';
+        linkedAnimalId: string;
+        linkedLotId: string;
+        linkedPlotId: string;
         unit: string;
         unitCost: string;
         stock: string;
@@ -96,6 +115,10 @@ const ReportsView: React.FC = () => {
         inputType: 'RACAO',
         applicationArea: DEFAULT_AREA_BY_TYPE.RACAO,
         targetSpecies: ['BOVINOS'],
+        launchLinkType: 'GERAL',
+        linkedAnimalId: '',
+        linkedLotId: '',
+        linkedPlotId: '',
         unit: 'kg',
         unitCost: '',
         stock: '',
@@ -110,21 +133,76 @@ const ReportsView: React.FC = () => {
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     const toErrorMessage = (reason: unknown): string => (reason instanceof Error ? reason.message : 'erro desconhecido');
+    const activeProject = useMemo(() => {
+        if (!selectedProductionId || selectedProductionId === 'ALL') {
+            return activities[0] ?? null;
+        }
+        return activities.find((activity) => activity.id === selectedProductionId) ?? activities[0] ?? null;
+    }, [activities, selectedProductionId]);
+    const activityProfile = useMemo(() => getActivityAutomationProfile(activeProject?.type), [activeProject?.type]);
+    const allowedAreaEntries = useMemo(
+        () =>
+            Object.entries(APPLICATION_AREA_LABELS).filter(([value]) =>
+                activityProfile.allowedApplicationAreas.includes(value as ProducerApplicationArea)
+            ),
+        [activityProfile.allowedApplicationAreas]
+    );
+    const allowedTargetSpeciesEntries = useMemo(
+        () =>
+            Object.entries(SPECIES_LABELS).filter(([value]) =>
+                activityProfile.allowedTargetSpecies.includes(value as ProducerTargetSpecies)
+            ),
+        [activityProfile.allowedTargetSpecies]
+    );
+    const selectedLot = useMemo(
+        () => lots.find((lot) => lot.id === selectedLotId) ?? null,
+        [lots, selectedLotId]
+    );
+    const filteredConsumptionData = useMemo(
+        () => consumptionData.filter((row) => !selectedLotId || !row.lotId || row.lotId === selectedLotId),
+        [consumptionData, selectedLotId]
+    );
+    const filteredLotAudits = useMemo(
+        () => lotAudits.filter((audit) => !selectedLotId || audit.lotId === selectedLotId),
+        [lotAudits, selectedLotId]
+    );
+    const resolveInputLinkLabel = (input: {
+        launchLinkType?: 'GERAL' | 'ANIMAL' | 'LOTE' | 'TALHAO';
+        linkedAnimalId?: string;
+        linkedLotId?: string;
+        linkedPlotId?: string;
+    }): string => {
+        if (input.launchLinkType === 'ANIMAL') {
+            const animal = animals.find((row) => row.id === input.linkedAnimalId);
+            return `Animal: ${animal?.earringCode ?? input.linkedAnimalId ?? '-'}`;
+        }
+        if (input.launchLinkType === 'LOTE') {
+            const lot = lots.find((row) => row.id === input.linkedLotId);
+            return `Lote: ${lot?.name ?? input.linkedLotId ?? '-'}`;
+        }
+        if (input.launchLinkType === 'TALHAO') {
+            const plot = plots.find((row) => row.id === input.linkedPlotId);
+            return `Talhao: ${plot?.name ?? input.linkedPlotId ?? '-'}`;
+        }
+        return 'Geral';
+    };
 
     const loadAll = async () => {
         setIsLoading(true);
         setLoadError(null);
         setPartialWarnings([]);
 
-        const [loadedTrends, loadedConsumption, loadedCapacity, loadedKpis, loadedWorkspace, loadedLots, loadedInputs, loadedExpenses] = await Promise.allSettled([
+        const [loadedTrends, loadedConsumption, loadedCapacity, loadedKpis, loadedWorkspace, loadedLots, loadedAnimals, loadedInputs, loadedExpenses, loadedLotAudits] = await Promise.allSettled([
             reportsService.listMarketTrends(),
             reportsService.listConsumptionRows(),
             reportsService.getCapacityReport(),
             producerOpsService.getKpis(),
             propertyService.loadWorkspace(),
             producerOpsService.listAnimalLots(),
+            producerOpsService.listAnimals(),
             producerOpsService.listInputs(),
             producerOpsService.listExpenses(),
+            reportsService.listLotAuditReadings(),
         ]);
 
         const warnings: string[] = [];
@@ -135,8 +213,10 @@ const ReportsView: React.FC = () => {
             loadedKpis,
             loadedWorkspace,
             loadedLots,
+            loadedAnimals,
             loadedInputs,
             loadedExpenses,
+            loadedLotAudits,
         ].some((entry) => entry.status === 'fulfilled');
 
         if (loadedTrends.status === 'fulfilled') {
@@ -169,16 +249,29 @@ const ReportsView: React.FC = () => {
 
         if (loadedWorkspace.status === 'fulfilled') {
             setPropertyData(loadedWorkspace.value.property);
+            setActivities(loadedWorkspace.value.activities);
+            setPlots(loadedWorkspace.value.pastures.map((pasture) => ({ id: pasture.id, name: pasture.name })));
         } else {
             setPropertyData(null);
+            setActivities([]);
+            setPlots([]);
             warnings.push(`Cadastro da propriedade: ${toErrorMessage(loadedWorkspace.reason)}`);
         }
 
         if (loadedLots.status === 'fulfilled') {
             setLots(loadedLots.value);
+            setSelectedLotId((previous) => previous || loadedLots.value[0]?.id || '');
         } else {
             setLots([]);
+            setSelectedLotId('');
             warnings.push(`Lotes de animais: ${toErrorMessage(loadedLots.reason)}`);
+        }
+
+        if (loadedAnimals.status === 'fulfilled') {
+            setAnimals(loadedAnimals.value);
+        } else {
+            setAnimals([]);
+            warnings.push(`Animais rastreados: ${toErrorMessage(loadedAnimals.reason)}`);
         }
 
         if (loadedInputs.status === 'fulfilled') {
@@ -193,6 +286,13 @@ const ReportsView: React.FC = () => {
         } else {
             setExpenses([]);
             warnings.push(`Despesas operacionais: ${toErrorMessage(loadedExpenses.reason)}`);
+        }
+
+        if (loadedLotAudits.status === 'fulfilled') {
+            setLotAudits(loadedLotAudits.value);
+        } else {
+            setLotAudits([]);
+            warnings.push(`Leituras de auditoria: ${toErrorMessage(loadedLotAudits.reason)}`);
         }
 
         if (!hasAnySuccess) {
@@ -213,12 +313,52 @@ const ReportsView: React.FC = () => {
         void loadAll();
     }, []);
 
+    useEffect(() => {
+        if (lots.length === 0) {
+            setSelectedLotId('');
+            return;
+        }
+        if (!lots.some((lot) => lot.id === selectedLotId)) {
+            setSelectedLotId(lots[0].id);
+        }
+    }, [lots, selectedLotId]);
+
+    useEffect(() => {
+        const fallbackArea = activityProfile.allowedApplicationAreas[0] ?? DEFAULT_AREA_BY_TYPE.RACAO;
+        const fallbackSpecies = activityProfile.defaultTargetSpecies;
+        setNewInput((previous) => ({
+            ...previous,
+            applicationArea: activityProfile.allowedApplicationAreas.includes(previous.applicationArea)
+                ? previous.applicationArea
+                : fallbackArea,
+            targetSpecies: previous.targetSpecies.filter((entry) => activityProfile.allowedTargetSpecies.includes(entry)),
+            unit: previous.unit || activityProfile.defaultInputUnit,
+        }));
+
+        if (fallbackSpecies.length > 0) {
+            setNewInput((previous) => ({
+                ...previous,
+                targetSpecies:
+                    previous.targetSpecies.length > 0
+                        ? previous.targetSpecies.filter((entry) => activityProfile.allowedTargetSpecies.includes(entry))
+                        : fallbackSpecies,
+            }));
+        }
+    }, [
+        activityProfile.allowedApplicationAreas,
+        activityProfile.allowedTargetSpecies,
+        activityProfile.defaultInputUnit,
+        activityProfile.defaultTargetSpecies,
+    ]);
+
     const refreshRegistryData = async () => {
-        const [kpis, loadedLots, loadedInputs, loadedExpenses] = await Promise.allSettled([
+        const [kpis, loadedLots, loadedAnimals, loadedInputs, loadedExpenses, loadedAudits] = await Promise.allSettled([
             producerOpsService.getKpis(),
             producerOpsService.listAnimalLots(),
+            producerOpsService.listAnimals(),
             producerOpsService.listInputs(),
             producerOpsService.listExpenses(),
+            reportsService.listLotAuditReadings(),
         ]);
         const refreshWarnings: string[] = [];
 
@@ -230,8 +370,15 @@ const ReportsView: React.FC = () => {
 
         if (loadedLots.status === 'fulfilled') {
             setLots(loadedLots.value);
+            setSelectedLotId((previous) => previous || loadedLots.value[0]?.id || '');
         } else {
             refreshWarnings.push(`Lotes: ${toErrorMessage(loadedLots.reason)}`);
+        }
+
+        if (loadedAnimals.status === 'fulfilled') {
+            setAnimals(loadedAnimals.value);
+        } else {
+            refreshWarnings.push(`Animais: ${toErrorMessage(loadedAnimals.reason)}`);
         }
 
         if (loadedInputs.status === 'fulfilled') {
@@ -244,6 +391,12 @@ const ReportsView: React.FC = () => {
             setExpenses(loadedExpenses.value);
         } else {
             refreshWarnings.push(`Despesas: ${toErrorMessage(loadedExpenses.reason)}`);
+        }
+
+        if (loadedAudits.status === 'fulfilled') {
+            setLotAudits(loadedAudits.value);
+        } else {
+            refreshWarnings.push(`Auditoria: ${toErrorMessage(loadedAudits.reason)}`);
         }
 
         if (refreshWarnings.length > 0) {
@@ -286,7 +439,11 @@ const ReportsView: React.FC = () => {
             addToast({ type: 'warning', title: 'Dados incompletos', message: 'Preencha os dados do insumo.' });
             return;
         }
-        if (SPECIES_REQUIRED_TYPES.has(newInput.inputType) && newInput.targetSpecies.length === 0) {
+        if (
+            SPECIES_REQUIRED_TYPES.has(newInput.inputType) &&
+            activityProfile.allowedTargetSpecies.length > 0 &&
+            newInput.targetSpecies.length === 0
+        ) {
             addToast({ type: 'warning', title: 'Classificacao obrigatoria', message: 'Selecione ao menos uma especie-alvo para este tipo de insumo.' });
             return;
         }
@@ -295,6 +452,10 @@ const ReportsView: React.FC = () => {
             inputType: newInput.inputType,
             applicationArea: newInput.applicationArea,
             targetSpecies: newInput.targetSpecies,
+            launchLinkType: newInput.launchLinkType,
+            linkedAnimalId: newInput.launchLinkType === 'ANIMAL' ? newInput.linkedAnimalId : undefined,
+            linkedLotId: newInput.launchLinkType === 'LOTE' ? newInput.linkedLotId : undefined,
+            linkedPlotId: newInput.launchLinkType === 'TALHAO' ? newInput.linkedPlotId : undefined,
             unit: newInput.unit,
             unitCost: Number(newInput.unitCost),
             stock: Number(newInput.stock),
@@ -302,9 +463,13 @@ const ReportsView: React.FC = () => {
         setNewInput({
             name: '',
             inputType: 'RACAO',
-            applicationArea: DEFAULT_AREA_BY_TYPE.RACAO,
-            targetSpecies: ['BOVINOS'],
-            unit: 'kg',
+            applicationArea: activityProfile.allowedApplicationAreas[0] ?? DEFAULT_AREA_BY_TYPE.RACAO,
+            targetSpecies: activityProfile.defaultTargetSpecies,
+            launchLinkType: 'GERAL',
+            linkedAnimalId: '',
+            linkedLotId: '',
+            linkedPlotId: '',
+            unit: activityProfile.defaultInputUnit,
             unitCost: '',
             stock: '',
         });
@@ -313,15 +478,31 @@ const ReportsView: React.FC = () => {
     };
 
     const handleInputTypeChange = (inputType: ProducerInputType) => {
+        const suggestedArea = DEFAULT_AREA_BY_TYPE[inputType];
+        const normalizedArea = activityProfile.allowedApplicationAreas.includes(suggestedArea)
+            ? suggestedArea
+            : activityProfile.allowedApplicationAreas[0] ?? suggestedArea;
+
         setNewInput((previous) => ({
             ...previous,
             inputType,
-            applicationArea: DEFAULT_AREA_BY_TYPE[inputType],
-            targetSpecies: SPECIES_REQUIRED_TYPES.has(inputType) ? previous.targetSpecies : [],
+            applicationArea: normalizedArea,
+            targetSpecies: SPECIES_REQUIRED_TYPES.has(inputType)
+                ? (() => {
+                    const nextSpecies = previous.targetSpecies.filter((entry) => activityProfile.allowedTargetSpecies.includes(entry));
+                    if (nextSpecies.length > 0) {
+                        return nextSpecies;
+                    }
+                    return activityProfile.defaultTargetSpecies;
+                })()
+                : [],
         }));
     };
 
     const toggleInputSpecies = (species: ProducerTargetSpecies) => {
+        if (!activityProfile.allowedTargetSpecies.includes(species)) {
+            return;
+        }
         setNewInput((previous) => {
             if (previous.targetSpecies.includes(species)) {
                 return { ...previous, targetSpecies: previous.targetSpecies.filter((entry) => entry !== species) };
@@ -346,13 +527,57 @@ const ReportsView: React.FC = () => {
         addToast({ type: 'success', title: 'Despesa lancada', message: 'Despesa registrada no operacional.' });
     };
 
-    const marketPriceBoi = useMemo(() => marketTrends.find(t => t.commodity === 'Boi Gordo')?.price || 295.00, [marketTrends]);
+    const handleCreateLotAuditReading = async () => {
+        if (!selectedLot) {
+            addToast({ type: 'warning', title: 'Lote obrigatorio', message: 'Selecione o lote antes de iniciar a leitura de auditoria.' });
+            return;
+        }
+        if (!auditForm.evidenceReference.trim()) {
+            addToast({ type: 'warning', title: 'Evidencia obrigatoria', message: 'Informe a evidencia digital da conferencia/pesagem.' });
+            return;
+        }
+
+        const checkedHeadcount = Number(auditForm.checkedHeadcount || 0);
+        const checkedWeightKg = Number(auditForm.checkedWeightKg || 0);
+
+        await reportsService.createLotAuditReading({
+            actor: currentUser?.name ?? 'Produtor',
+            lotId: selectedLot.id,
+            lotName: selectedLot.name,
+            checkedHeadcount,
+            checkedWeightKg,
+            notes: auditForm.notes,
+            evidenceReference: auditForm.evidenceReference,
+        });
+
+        setAuditForm({
+            checkedHeadcount: '',
+            checkedWeightKg: '',
+            evidenceReference: '',
+            notes: '',
+        });
+        await refreshRegistryData();
+        addToast({ type: 'success', title: 'Leitura registrada', message: 'Conferencia/pesagem do lote registrada com auditoria.' });
+    };
+
+    const marketReferencePrice = useMemo(() => {
+        const exactCommodity = marketTrends.find((trend) => trend.commodity === simCommodity);
+        if (exactCommodity) {
+            return exactCommodity.price;
+        }
+        const fallbackCommodity = marketTrends.find((trend) => trend.commodity === activityProfile.defaultCommodity);
+        return fallbackCommodity?.price || 295.0;
+    }, [marketTrends, simCommodity, activityProfile.defaultCommodity]);
+
+    useEffect(() => {
+        setSimCommodity(activityProfile.defaultCommodity);
+    }, [activityProfile.defaultCommodity]);
 
     useEffect(() => {
         if (salePrice === 0) {
-            setSalePrice(marketPriceBoi);
+            setSalePrice(marketReferencePrice);
         }
-    }, [marketPriceBoi, salePrice]);
+    }, [marketReferencePrice, salePrice]);
 
     const revenuePerHead = salePrice * saleWeight;
     const totalCostPerHead = costPerUnit * saleWeight;
@@ -411,7 +636,49 @@ const ReportsView: React.FC = () => {
                 <ChartBarIcon className="h-8 w-8 mr-3 text-indigo-600" />
                 Relatorios Gerenciais & Performance
             </h2>
-            <p className="text-slate-600 mb-8">Analise detalhada baseada nos lancamentos operacionais de campo.</p>
+            <p className="text-slate-600 mb-4">
+                Analise detalhada baseada nos lancamentos operacionais de campo.
+                {activeProject ? ` Perfil automatico ativo: ${activeProject.type}.` : ''}
+            </p>
+            {activeProject && (
+                <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Adaptacao automatica por atividade
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                        Unidade principal: <span className="font-semibold">{activityProfile.unitLabel}</span> | Agrupamento:
+                        <span className="font-semibold"> {activityProfile.lotLabel}</span>
+                    </p>
+                    <p className="mt-2 text-xs text-slate-600">
+                        Campos obrigatorios: {activityProfile.requiredRegistryFields.join(' | ')}
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {activityProfile.checklist.map((item) => (
+                            <p key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                {item}
+                            </p>
+                        ))}
+                    </div>
+                    {activityProfile.embrapaReferences.length > 0 && (
+                        <div className="mt-3">
+                            <p className="text-xs font-semibold text-slate-700">Referencias tecnicas Embrapa</p>
+                            <div className="mt-1 space-y-1">
+                                {activityProfile.embrapaReferences.map((reference) => (
+                                    <a
+                                        className="block text-xs text-indigo-700 hover:underline"
+                                        href={reference.url}
+                                        key={reference.url}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                    >
+                                        {reference.title}
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
             {partialWarnings.length > 0 && (
                 <div className="mb-6 p-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
                     <p className="font-semibold mb-1">Carregamento parcial detectado</p>
@@ -432,15 +699,19 @@ const ReportsView: React.FC = () => {
                     <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold text-slate-800">Relatorio de Consumo por Lote</h3>
-                            <select value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)} className="p-2 border border-slate-300 rounded-md bg-slate-50 text-sm font-semibold text-slate-700">
-                                {lots.map((lot) => <option key={lot.id}>{lot.name}</option>)}
+                            <select value={selectedLotId} onChange={(e) => setSelectedLotId(e.target.value)} className="p-2 border border-slate-300 rounded-md bg-slate-50 text-sm font-semibold text-slate-700">
+                                {lots.map((lot) => <option key={lot.id} value={lot.id}>{lot.name}</option>)}
                             </select>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                             <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                                <p className="text-xs font-bold text-indigo-800 uppercase">Total Animais no Lote</p>
-                                <p className="text-2xl font-bold text-indigo-900">{registryKpis.totalAnimals} <span className="text-sm font-normal">cabecas</span></p>
+                                <p className="text-xs font-bold text-indigo-800 uppercase">
+                                    Total de {activityProfile.unitLabel} no {activityProfile.lotLabel}
+                                </p>
+                                <p className="text-2xl font-bold text-indigo-900">
+                                    {registryKpis.totalAnimals} <span className="text-sm font-normal">{activityProfile.unitLabel}</span>
+                                </p>
                             </div>
                             <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
                                 <p className="text-xs font-bold text-emerald-800 uppercase">Custo Medio Total / Cabeca</p>
@@ -449,6 +720,55 @@ const ReportsView: React.FC = () => {
                             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                                 <p className="text-xs font-bold text-slate-600 uppercase">Despesas Operacionais</p>
                                 <p className="text-lg font-bold text-slate-800">{formatCurrency(registryKpis.totalExpenses)}</p>
+                            </div>
+                        </div>
+
+                        <div className="mb-8 rounded-lg border border-slate-200 p-4 bg-slate-50">
+                            <h4 className="font-bold text-slate-800 mb-2">Auditoria de lote (leitura, conferencia e pesagem)</h4>
+                            <p className="text-xs text-slate-600 mb-3">
+                                Selecione primeiro o lote auditado e registre leitura com evidencia digital para liberar o fechamento.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                <input
+                                    value={auditForm.checkedHeadcount}
+                                    onChange={(e) => setAuditForm((prev) => ({ ...prev, checkedHeadcount: e.target.value }))}
+                                    className="p-2 border rounded"
+                                    placeholder="Cabecas conferidas"
+                                />
+                                <input
+                                    value={auditForm.checkedWeightKg}
+                                    onChange={(e) => setAuditForm((prev) => ({ ...prev, checkedWeightKg: e.target.value }))}
+                                    className="p-2 border rounded"
+                                    placeholder="Peso conferido (kg)"
+                                />
+                                <input
+                                    value={auditForm.evidenceReference}
+                                    onChange={(e) => setAuditForm((prev) => ({ ...prev, evidenceReference: e.target.value }))}
+                                    className="p-2 border rounded"
+                                    placeholder="Evidencia digital (QR/foto/video/hash)"
+                                />
+                                <input
+                                    value={auditForm.notes}
+                                    onChange={(e) => setAuditForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                    className="p-2 border rounded"
+                                    placeholder="Observacoes"
+                                />
+                            </div>
+                            <button onClick={() => void handleCreateLotAuditReading()} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-md font-semibold">
+                                Registrar leitura de auditoria
+                            </button>
+                            <div className="mt-3 space-y-2">
+                                {filteredLotAudits.slice(0, 5).map((audit) => (
+                                    <div key={audit.id} className="text-xs flex flex-wrap gap-3 justify-between border-b border-slate-200 pb-2">
+                                        <span>{audit.lotName}</span>
+                                        <span>cabecas: {audit.checkedHeadcount}</span>
+                                        <span>peso: {audit.checkedWeightKg} kg</span>
+                                        <span>{new Date(audit.createdAt).toLocaleString('pt-BR')}</span>
+                                    </div>
+                                ))}
+                                {filteredLotAudits.length === 0 && (
+                                    <p className="text-xs text-slate-500">Nenhuma leitura de auditoria registrada para este lote.</p>
+                                )}
                             </div>
                         </div>
 
@@ -463,14 +783,14 @@ const ReportsView: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {consumptionData.length === 0 && (
+                                {filteredConsumptionData.length === 0 && (
                                     <tr>
                                         <td className="p-4 text-slate-500" colSpan={5}>
                                             Nenhum dado de consumo disponivel para o periodo.
                                         </td>
                                     </tr>
                                 )}
-                                {consumptionData.map((row) => (
+                                {filteredConsumptionData.map((row) => (
                                     <tr key={row.id} className="border-b hover:bg-slate-50">
                                         <td className="p-4 font-bold text-slate-700">{row.product}</td>
                                         <td className="p-4 font-mono text-slate-600">{row.total}</td>
@@ -506,9 +826,9 @@ const ReportsView: React.FC = () => {
                             <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
                                 <h3 className="text-xl font-bold text-slate-800 mb-6">Capacidade & Evolucao</h3>
                                 <ul className="space-y-4">
-                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Animais Entrados</span><span className="font-bold text-slate-800">{capacityData.animalsIn}</span></li>
+                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">{activityProfile.unitLabel} Entrados</span><span className="font-bold text-slate-800">{capacityData.animalsIn}</span></li>
                                     <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Mortalidade / Perda</span><span className="font-bold text-red-600">{capacityData.mortality} ({capacityMortalityPercent.toFixed(1)}%)</span></li>
-                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">Peso Atual Medio</span><span className="font-bold text-indigo-600">{capacityData.currentWeight}</span></li>
+                                    <li className="flex justify-between items-center p-3 bg-slate-50 rounded"><span className="text-sm font-semibold text-slate-600">{activityProfile.averageMeasureLabel}</span><span className="font-bold text-indigo-600">{capacityData.currentWeight}</span></li>
                                     <li className="flex justify-between items-center p-3 border border-indigo-100 bg-indigo-50 rounded"><span className="text-sm font-bold text-indigo-800">Peso Meta (Abate)</span><span className="font-bold text-indigo-800">{capacityData.projectedWeight}</span></li>
                                 </ul>
                             </div>
@@ -521,7 +841,7 @@ const ReportsView: React.FC = () => {
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="p-4 bg-slate-50 rounded border border-slate-200">
-                                    <p className="text-xs uppercase font-bold text-slate-500">Animais cadastrados</p>
+                                    <p className="text-xs uppercase font-bold text-slate-500">{activityProfile.unitLabel} cadastrados</p>
                                     <p className="text-xl font-bold text-slate-800">{registryKpis.totalAnimals}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded border border-slate-200">
@@ -529,7 +849,7 @@ const ReportsView: React.FC = () => {
                                     <p className="text-xl font-bold text-slate-800">{formatCurrency(registryKpis.totalExpenses)}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded border border-slate-200">
-                                    <p className="text-xs uppercase font-bold text-slate-500">Custo por cabeca</p>
+                                    <p className="text-xs uppercase font-bold text-slate-500">Custo por {activityProfile.unitLabel}</p>
                                     <p className="text-xl font-bold text-slate-800">{formatCurrency(registryKpis.costPerHead)}</p>
                                 </div>
                             </div>
@@ -543,10 +863,19 @@ const ReportsView: React.FC = () => {
                     <div className="bg-white p-8 rounded-xl shadow-md border border-slate-200">
                         <div className="flex items-center mb-6"><CalculatorIcon className="h-6 w-6 text-emerald-600 mr-2" /><h3 className="text-xl font-bold text-slate-800">Simulador de Lucratividade em Tempo Real</h3></div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cenario de Mercado</label><select value={simCommodity} onChange={(e) => setSimCommodity(e.target.value)} className="w-full p-3 border border-slate-300 rounded-md"><option>Boi Gordo</option></select></div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cenario de Mercado</label>
+                                <select value={simCommodity} onChange={(e) => setSimCommodity(e.target.value)} className="w-full p-3 border border-slate-300 rounded-md">
+                                    {[activityProfile.defaultCommodity, ...marketTrends.map((trend) => trend.commodity)]
+                                        .filter((value, index, array) => array.indexOf(value) === index)
+                                        .map((commodity) => (
+                                            <option key={commodity} value={commodity}>{commodity}</option>
+                                        ))}
+                                </select>
+                            </div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Preco Venda (@)</label><input type="number" value={salePrice} onChange={(e) => setSalePrice(Number(e.target.value || 0))} className="w-full p-3 border border-slate-300 rounded-md" /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Custo por @</label><input type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(Number(e.target.value || 0))} className="w-full p-3 border border-slate-300 rounded-md" /></div>
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Peso Venda (@)</label><input type="number" value={saleWeight} onChange={(e) => setSaleWeight(Number(e.target.value || 0))} className="w-full p-3 border border-slate-300 rounded-md" /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{activityProfile.volumeInputLabel}</label><input type="number" value={saleWeight} onChange={(e) => setSaleWeight(Number(e.target.value || 0))} className="w-full p-3 border border-slate-300 rounded-md" /></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="p-4 bg-emerald-50 rounded-lg"><p className="text-xs uppercase text-emerald-700 font-bold">Margem Bruta / Cabeca</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(grossMarginPerHead)}</p></div>
@@ -562,9 +891,9 @@ const ReportsView: React.FC = () => {
             {activeReport === 'REGISTRY' && (
                 <div className="animate-fade-in space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-lg border"><p className="text-xs uppercase text-slate-500 font-bold">Bovinos Cadastrados</p><p className="text-2xl font-bold text-slate-800">{registryKpis.totalAnimals}</p></div>
+                        <div className="bg-white p-4 rounded-lg border"><p className="text-xs uppercase text-slate-500 font-bold">{activityProfile.unitLabel} cadastrados</p><p className="text-2xl font-bold text-slate-800">{registryKpis.totalAnimals}</p></div>
                         <div className="bg-white p-4 rounded-lg border"><p className="text-xs uppercase text-slate-500 font-bold">Despesas Operacionais</p><p className="text-2xl font-bold text-slate-800">{formatCurrency(registryKpis.totalExpenses)}</p></div>
-                        <div className="bg-white p-4 rounded-lg border"><p className="text-xs uppercase text-slate-500 font-bold">Custo por Cabeca</p><p className="text-2xl font-bold text-slate-800">{formatCurrency(registryKpis.costPerHead)}</p></div>
+                        <div className="bg-white p-4 rounded-lg border"><p className="text-xs uppercase text-slate-500 font-bold">Custo medio por {activityProfile.unitLabel}</p><p className="text-2xl font-bold text-slate-800">{formatCurrency(registryKpis.costPerHead)}</p></div>
                     </div>
 
                     {propertyData && (
@@ -582,39 +911,74 @@ const ReportsView: React.FC = () => {
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
-                            <h3 className="text-lg font-bold text-slate-800">Cadastro de Lotes de Animais</h3>
+                            <h3 className="text-lg font-bold text-slate-800">Cadastro de {activityProfile.lotLabel}</h3>
                             <div className="grid grid-cols-2 gap-3">
-                                <input value={newLot.name} onChange={(e) => setNewLot({ ...newLot, name: e.target.value })} className="p-2 border rounded" placeholder="Nome do lote" />
-                                <input value={newLot.category} onChange={(e) => setNewLot({ ...newLot, category: e.target.value })} className="p-2 border rounded" placeholder="Categoria" />
-                                <input type="number" value={newLot.headcount} onChange={(e) => setNewLot({ ...newLot, headcount: e.target.value })} className="p-2 border rounded" placeholder="Qtd bovinos" />
-                                <input type="number" value={newLot.averageWeightKg} onChange={(e) => setNewLot({ ...newLot, averageWeightKg: e.target.value })} className="p-2 border rounded" placeholder="Peso medio (kg)" />
+                                <input value={newLot.name} onChange={(e) => setNewLot({ ...newLot, name: e.target.value })} className="p-2 border rounded" placeholder={`Nome do ${activityProfile.lotLabel.toLowerCase()}`} />
+                                <input value={newLot.category} onChange={(e) => setNewLot({ ...newLot, category: e.target.value })} className="p-2 border rounded" placeholder={activityProfile.lotCategoryLabel} />
+                                <input type="number" value={newLot.headcount} onChange={(e) => setNewLot({ ...newLot, headcount: e.target.value })} className="p-2 border rounded" placeholder={`Qtd ${activityProfile.unitLabel}`} />
+                                <input type="number" value={newLot.averageWeightKg} onChange={(e) => setNewLot({ ...newLot, averageWeightKg: e.target.value })} className="p-2 border rounded" placeholder={activityProfile.averageMeasureLabel} />
                             </div>
                             <button onClick={() => void handleCreateLot()} className="px-4 py-2 bg-emerald-600 text-white rounded-md font-semibold">Cadastrar lote</button>
-                            <div className="border-t pt-3 space-y-2">{lots.map((lot) => <div key={lot.id} className="text-sm flex justify-between"><span>{lot.name} ({lot.category})</span><span className="font-semibold">{lot.headcount} cabecas</span></div>)}</div>
+                            <div className="border-t pt-3 space-y-2">{lots.map((lot) => <div key={lot.id} className="text-sm flex justify-between"><span>{lot.name} ({lot.category})</span><span className="font-semibold">{lot.headcount} {activityProfile.unitLabel}</span></div>)}</div>
                         </div>
 
                         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
-                            <h3 className="text-lg font-bold text-slate-800">Cadastro de Insumos</h3>
+                            <h3 className="text-lg font-bold text-slate-800">Cadastro de {activityProfile.inventoryLabel}</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} className="p-2 border rounded" placeholder="Nome do insumo" />
                                 <select value={newInput.inputType} onChange={(e) => handleInputTypeChange(e.target.value as ProducerInputType)} className="p-2 border rounded">
-                                    {Object.entries(INPUT_TYPE_LABELS).map(([value, label]) => (
+                                    {Object.entries(INPUT_TYPE_LABELS).filter(([value]) => activityProfile.allowedInputTypes.includes(value as ProducerInputType)).map(([value, label]) => (
                                         <option key={value} value={value}>{label}</option>
                                     ))}
                                 </select>
                                 <select value={newInput.applicationArea} onChange={(e) => setNewInput({ ...newInput, applicationArea: e.target.value as ProducerApplicationArea })} className="p-2 border rounded">
-                                    {Object.entries(APPLICATION_AREA_LABELS).map(([value, label]) => (
+                                    {allowedAreaEntries.map(([value, label]) => (
                                         <option key={value} value={value}>{label}</option>
                                     ))}
                                 </select>
                                 <input value={newInput.unit} onChange={(e) => setNewInput({ ...newInput, unit: e.target.value })} className="p-2 border rounded" placeholder="Unidade" />
                                 <input type="number" value={newInput.unitCost} onChange={(e) => setNewInput({ ...newInput, unitCost: e.target.value })} className="p-2 border rounded" placeholder="Custo unitario" />
                                 <input type="number" value={newInput.stock} onChange={(e) => setNewInput({ ...newInput, stock: e.target.value })} className="p-2 border rounded" placeholder="Estoque" />
+                                <select
+                                    value={newInput.launchLinkType}
+                                    onChange={(e) => setNewInput({ ...newInput, launchLinkType: e.target.value as 'GERAL' | 'ANIMAL' | 'LOTE' | 'TALHAO', linkedAnimalId: '', linkedLotId: '', linkedPlotId: '' })}
+                                    className="p-2 border rounded"
+                                >
+                                    <option value="GERAL">Lancamento geral</option>
+                                    <option value="ANIMAL">Vincular a animal</option>
+                                    <option value="LOTE">Vincular a lote</option>
+                                    <option value="TALHAO">Vincular a talhao</option>
+                                </select>
+                                {newInput.launchLinkType === 'ANIMAL' && (
+                                    <select value={newInput.linkedAnimalId} onChange={(e) => setNewInput({ ...newInput, linkedAnimalId: e.target.value })} className="p-2 border rounded">
+                                        <option value="">Selecionar animal</option>
+                                        {animals.map((animal) => (
+                                            <option key={animal.id} value={animal.id}>{animal.earringCode} ({animal.species})</option>
+                                        ))}
+                                    </select>
+                                )}
+                                {newInput.launchLinkType === 'LOTE' && (
+                                    <select value={newInput.linkedLotId} onChange={(e) => setNewInput({ ...newInput, linkedLotId: e.target.value })} className="p-2 border rounded">
+                                        <option value="">Selecionar lote</option>
+                                        {lots.map((lot) => (
+                                            <option key={lot.id} value={lot.id}>{lot.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                                {newInput.launchLinkType === 'TALHAO' && (
+                                    <select value={newInput.linkedPlotId} onChange={(e) => setNewInput({ ...newInput, linkedPlotId: e.target.value })} className="p-2 border rounded">
+                                        <option value="">Selecionar talhao/pasto</option>
+                                        {plots.map((plot) => (
+                                            <option key={plot.id} value={plot.id}>{plot.name}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             <div className="border rounded-lg p-3 bg-slate-50">
                                 <p className="text-xs font-bold text-slate-600 uppercase mb-2">Especie-alvo</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {Object.entries(SPECIES_LABELS).map(([value, label]) => {
+                                {allowedTargetSpeciesEntries.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                    {allowedTargetSpeciesEntries.map(([value, label]) => {
                                         const species = value as ProducerTargetSpecies;
                                         const checked = newInput.targetSpecies.includes(species);
                                         return (
@@ -629,8 +993,13 @@ const ReportsView: React.FC = () => {
                                             </label>
                                         );
                                     })}
-                                </div>
-                                {!SPECIES_REQUIRED_TYPES.has(newInput.inputType) && (
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500">
+                                        Este perfil utiliza classificacao de insumo sem especie-alvo na interface.
+                                    </p>
+                                )}
+                                {!SPECIES_REQUIRED_TYPES.has(newInput.inputType) && allowedTargetSpeciesEntries.length > 0 && (
                                     <p className="text-xs text-slate-500 mt-2">Para este tipo de insumo, a especie-alvo e opcional.</p>
                                 )}
                             </div>
@@ -638,7 +1007,9 @@ const ReportsView: React.FC = () => {
                             <div className="border-t pt-3 space-y-3">
                                 {Object.entries(inputsByArea).map(([area, areaInputs]) => (
                                     <div key={area} className="border rounded-lg p-3">
-                                        <p className="text-xs font-bold uppercase text-slate-500 mb-2">{APPLICATION_AREA_LABELS[area as ProducerApplicationArea]}</p>
+                                        <p className="text-xs font-bold uppercase text-slate-500 mb-2">
+                                            {APPLICATION_AREA_LABELS[area as ProducerApplicationArea]}
+                                        </p>
                                         <div className="space-y-2">
                                             {areaInputs.map((input) => (
                                                 <div key={input.id} className="text-sm flex flex-col gap-1 border-b border-slate-100 pb-2 last:border-b-0">
@@ -648,6 +1019,7 @@ const ReportsView: React.FC = () => {
                                                     </div>
                                                     <div className="flex flex-wrap gap-2 text-xs text-slate-600">
                                                         <span className="px-2 py-0.5 rounded bg-slate-100">{INPUT_TYPE_LABELS[input.inputType]}</span>
+                                                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">{resolveInputLinkLabel(input)}</span>
                                                         {input.targetSpecies.length > 0 && (
                                                             <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
                                                                 {input.targetSpecies.map((species) => SPECIES_LABELS[species]).join(', ')}

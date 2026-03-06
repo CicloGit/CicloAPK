@@ -9,20 +9,27 @@ import MapIcon from '../icons/MapIcon';
 import { CubeIcon } from '../icons/CubeIcon';
 import LockClosedIcon from '../icons/LockClosedIcon';
 import TrendingUpIcon from '../icons/TrendingUpIcon';
+import DNAIcon from '../icons/DNAIcon';
+import TrashIcon from '../icons/TrashIcon';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import { useApp } from '../../contexts/AppContext';
 import {
   integratorService,
   IntegratorApiAuthMode,
   IntegratorApiLink,
+  IntegratorBiologicalAsset,
+  IntegratorBiologicalAssetStatus,
 } from '../../services/integratorService';
-import { IntegratedProducer, PartnershipOffer } from '../../types';
+import { networkNeedsService } from '../../services/networkNeedsService';
+import { IntegratedProducer, NetworkNeed, PartnershipOffer } from '../../types';
 
 type IntegratorTab =
   | 'PRODUCERS'
   | 'DEMANDS'
   | 'OFFERS'
+  | 'NETWORK'
   | 'CONTRACT_SCHEDULE'
+  | 'BIO_ASSETS'
   | 'FINANCE'
   | 'RECEIVABLES'
   | 'PAYMENTS';
@@ -67,6 +74,20 @@ interface PaymentRow {
   status: PaymentRowStatus;
 }
 
+interface BiologicalAssetFormState {
+  code: string;
+  species: string;
+  category: string;
+  propertyName: string;
+  headcount: string;
+  averageWeightKg: string;
+  estimatedValue: string;
+  healthStatus: string;
+  status: IntegratorBiologicalAssetStatus;
+  lastMovementAt: string;
+  notes: string;
+}
+
 const KpiCard: React.FC<{ title: string; value: string; icon: React.FC<{ className?: string }>; color: string }> = ({
   title,
   value,
@@ -99,6 +120,7 @@ const IntegratorDashboard: React.FC = () => {
   const { currentUser } = useApp();
   const [activeTab, setActiveTab] = useState<IntegratorTab>('PRODUCERS');
   const [offers, setOffers] = useState<PartnershipOffer[]>([]);
+  const [networkNeeds, setNetworkNeeds] = useState<NetworkNeed[]>([]);
   const [producers, setProducers] = useState<IntegratedProducer[]>([]);
   const [selectedProducerId, setSelectedProducerId] = useState<string | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
@@ -116,6 +138,7 @@ const IntegratorDashboard: React.FC = () => {
   const [apiFeedback, setApiFeedback] = useState<string | null>(null);
   const [isSavingApi, setIsSavingApi] = useState(false);
   const [isUpdatingOffer, setIsUpdatingOffer] = useState(false);
+  const [updatingNeedId, setUpdatingNeedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -129,14 +152,16 @@ const IntegratorDashboard: React.FC = () => {
       setLoadError(null);
       setActionError(null);
       try {
-        const [loadedProducers, loadedOffers, loadedApiLink] = await Promise.all([
+        const [loadedProducers, loadedOffers, loadedApiLink, loadedNetworkNeeds] = await Promise.all([
           integratorService.listProducers(),
           integratorService.listOffers(),
           currentUser?.uid ? integratorService.getApiLink(currentUser.uid) : Promise.resolve(null),
+          networkNeedsService.listVisibleNeeds(currentUser?.role),
         ]);
         setProducers(loadedProducers);
         setOffers(loadedOffers);
         setApiLink(loadedApiLink);
+        setNetworkNeeds(loadedNetworkNeeds);
 
         if (loadedApiLink) {
           setApiCompanyName(loadedApiLink.companyName);
@@ -154,7 +179,7 @@ const IntegratorDashboard: React.FC = () => {
     };
 
     void loadIntegrator();
-  }, [currentUser?.name, currentUser?.uid]);
+  }, [currentUser?.name, currentUser?.role, currentUser?.uid]);
 
   const handleCreateDemand = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -168,8 +193,12 @@ const IntegratorDashboard: React.FC = () => {
         title: demandTitle.trim(),
         description: demandDescription.trim(),
         type: demandType,
+      }, {
+        requesterName: currentUser?.name,
       });
       setOffers((prev) => [created, ...prev]);
+      const loadedNetworkNeeds = await networkNeedsService.listVisibleNeeds(currentUser?.role);
+      setNetworkNeeds(loadedNetworkNeeds);
       setDemandTitle('');
       setDemandDescription('');
       setDemandType('Compra Garantida');
@@ -224,12 +253,28 @@ const IntegratorDashboard: React.FC = () => {
       setIsUpdatingOffer(true);
       await integratorService.updateOfferStatus(offer.id, status);
       setOffers((prev) => prev.map((item) => (item.id === offer.id ? { ...item, status } : item)));
+      const loadedNetworkNeeds = await networkNeedsService.listVisibleNeeds(currentUser?.role);
+      setNetworkNeeds(loadedNetworkNeeds);
       setSelectedOfferId(offer.id);
       setActionError(null);
     } catch {
       setActionError('Nao foi possivel atualizar o status da oferta.');
     } finally {
       setIsUpdatingOffer(false);
+    }
+  };
+
+  const handleUpdateNeedStatus = async (needId: string, status: NetworkNeed['status']) => {
+    try {
+      setUpdatingNeedId(needId);
+      await networkNeedsService.updateNeedStatus({ needId, status });
+      const loadedNetworkNeeds = await networkNeedsService.listVisibleNeeds(currentUser?.role);
+      setNetworkNeeds(loadedNetworkNeeds);
+      setActionError(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Nao foi possivel atualizar necessidade da rede.');
+    } finally {
+      setUpdatingNeedId(null);
     }
   };
 
@@ -251,6 +296,10 @@ const IntegratorDashboard: React.FC = () => {
   );
 
   const openOffers = useMemo(() => offers.filter((offer) => offer.status === 'Aberta'), [offers]);
+  const openNetworkNeeds = useMemo(
+    () => networkNeeds.filter((need) => need.status === 'ABERTA' || need.status === 'EM_ATENDIMENTO'),
+    [networkNeeds]
+  );
 
   const contractSchedule = useMemo<ContractScheduleRow[]>(
     () =>
@@ -355,10 +404,11 @@ const IntegratorDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <KpiCard title="Produtores Contratados" value={contractedProducers.length.toString()} icon={UsersIcon} color="text-indigo-600" />
         <KpiCard title="Recebiveis em Aberto" value={formatCurrency(pendingReceivables)} icon={CashIcon} color="text-amber-600" />
         <KpiCard title="Pagamentos Programados" value={formatCurrency(scheduledPayments)} icon={BriefcaseIcon} color="text-emerald-600" />
+        <KpiCard title="Necessidades da Rede" value={openNetworkNeeds.length.toString()} icon={PlusCircleIcon} color="text-blue-600" />
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm mb-6">
@@ -385,11 +435,12 @@ const IntegratorDashboard: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden min-h-[540px]">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 border-b border-slate-200">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 border-b border-slate-200">
           {[
             { key: 'PRODUCERS', label: 'Produtores' },
             { key: 'DEMANDS', label: 'Cadastrar Demanda' },
             { key: 'OFFERS', label: 'Ofertas Recebidas' },
+            { key: 'NETWORK', label: 'Necessidades Rede' },
             { key: 'CONTRACT_SCHEDULE', label: 'Escala Contratos' },
             { key: 'FINANCE', label: 'Financeiro' },
             { key: 'RECEIVABLES', label: 'Recebiveis' },

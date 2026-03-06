@@ -34,7 +34,7 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
 fi
 
 echo "Projeto de deploy: $PROJECT_ID"
-echo "Passo 1/8: sincronizando branch atual sem perder alteracoes locais..."
+echo "Passo 1/10: sincronizando branch atual sem perder alteracoes locais..."
 "$SYNC_SCRIPT"
 
 if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
@@ -73,7 +73,8 @@ if [[ "$PROJECT_ID" == "$PROD_PROJECT_ID" ]]; then
     VITE_FIREBASE_STORAGE_BUCKET \
     VITE_FIREBASE_MESSAGING_SENDER_ID \
     VITE_FIREBASE_APP_ID \
-    VITE_BACKEND_BASE_URL; do
+    VITE_BACKEND_BASE_URL \
+    SETTLEMENT_PROVIDER; do
     if ! grep -Eq "^${key}=.+" "$ENV_FILE"; then
       echo "Deploy bloqueado: variavel obrigatoria ausente em $ENV_FILE -> $key"
       exit 1
@@ -85,32 +86,45 @@ if [[ "$PROJECT_ID" == "$PROD_PROJECT_ID" ]]; then
     exit 1
   fi
 
-  echo "Validando modo real estrito (sem mocks)..."
-  node "$REPO_ROOT/scripts/verify-firebase-real-mode.mjs"
+  echo "Validando contrato de ambiente de producao..."
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+  if [[ -z "${FIREBASE_PROJECT_ID:-}" && -n "${VITE_FIREBASE_PROJECT_ID:-}" ]]; then
+    export FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID"
+  fi
+  node "$REPO_ROOT/scripts/verify-production-env.mjs"
 fi
 
-echo "Passo 2/8: instalando dependencias do web app..."
+echo "Validando modo real estrito (sem mocks)..."
+node "$REPO_ROOT/scripts/verify-firebase-real-mode.mjs"
+
+echo "Validando canalizacao por tenant/portal..."
+node "$REPO_ROOT/scripts/verify-portal-channelization.mjs"
+
+echo "Passo 2/10: instalando dependencias do web app..."
 cd "$APP_DIR"
 npm ci
 
-echo "Passo 3/8: executando typecheck..."
+echo "Passo 3/10: executando typecheck..."
 npm run typecheck
 
-echo "Passo 4/8: gerando build de producao..."
+echo "Passo 4/10: gerando build de producao..."
 npm run build
 
-echo "Passo 5/8: instalando dependencias das functions..."
+echo "Passo 5/10: instalando dependencias das functions..."
 cd "$FUNCTIONS_DIR"
 npm install
 
-echo "Passo 6/8: compilando functions..."
+echo "Passo 6/10: compilando functions..."
 npm run build
 
-echo "Passo 7/8: publicando Hosting + APIs + kernel + Rules/Indexes..."
+echo "Passo 7/10: publicando Hosting + APIs + kernel + Rules/Indexes..."
 cd "$APP_DIR"
 npx firebase-tools deploy --only "hosting,functions:api,functions:agroApi,functions:marketApi,functions:supportApi,functions:secureConfirmInboundEntry,functions:secureRegisterStockLoss,functions:adminSetUserClaims,functions:adminUpsertPublicMarketPoint,functions:recomputePublicInputCostIndexDaily,firestore:rules,firestore:indexes,storage" --project "$PROJECT_ID"
 
-echo "Passo 8/8: executando smoke test de producao..."
+echo "Passo 8/10: executando smoke test de producao..."
 WEB_URL="https://${PROJECT_ID}.web.app"
 API_HEALTH_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/api/health"
 AGRO_HEALTH_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/agroApi/health"
@@ -121,5 +135,11 @@ curl -fsS "$API_HEALTH_URL" | grep -q '"status":"ok"'
 curl -fsS "$AGRO_HEALTH_URL" | grep -q '"status":"ok"'
 curl -fsS "$MARKET_HEALTH_URL" | grep -q '"status":"ok"'
 curl -fsS "$PUBLIC_SUMMARY_URL" | grep -q '"countsByCategory"'
+
+echo "Passo 9/10: validando canalizacao pos-deploy..."
+node "$REPO_ROOT/scripts/verify-portal-channelization.mjs"
+
+echo "Passo 10/10: validando modo real pos-deploy..."
+node "$REPO_ROOT/scripts/verify-firebase-real-mode.mjs"
 
 echo "Deploy concluido com sucesso para: $PROJECT_ID (commit $LOCAL_SHA)"

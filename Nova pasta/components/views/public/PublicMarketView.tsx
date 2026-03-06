@@ -5,9 +5,13 @@ import LoadingSpinner from '../../shared/LoadingSpinner';
 import {
   AggregatedStat,
   AuctionListing,
+  ExternalMarketBenchmark,
+  ExternalNewsDigestItem,
   MarketSaturation,
   MarketTrend,
   NewsItem,
+  PublicClimateForecast,
+  PublicClimateRegion,
   PublicInputCostIndex,
   PublicMarketPriceCategory,
   PublicMarketPriceItem,
@@ -20,6 +24,14 @@ const CATEGORY_FILTERS: Array<{ label: string; value: 'ALL' | PublicMarketPriceC
   { label: 'Commodities', value: 'COMMODITY' },
   { label: 'Animais', value: 'LIVESTOCK' },
   { label: 'Insumos', value: 'INPUT' },
+];
+
+const CLIMATE_REGION_OPTIONS: Array<{ label: string; value: PublicClimateRegion }> = [
+  { label: 'Norte', value: 'NORTE' },
+  { label: 'Nordeste', value: 'NORDESTE' },
+  { label: 'Centro-Oeste', value: 'CENTRO_OESTE' },
+  { label: 'Sudeste', value: 'SUDESTE' },
+  { label: 'Sul', value: 'SUL' },
 ];
 
 const PublicMarketView: React.FC = () => {
@@ -38,6 +50,11 @@ const PublicMarketView: React.FC = () => {
   const [marketSummary, setMarketSummary] = useState<PublicMarketSummary | null>(null);
   const [inputCostIndex, setInputCostIndex] = useState<PublicInputCostIndex | null>(null);
   const [publicPrices, setPublicPrices] = useState<PublicMarketPriceItem[]>([]);
+  const [externalBenchmark, setExternalBenchmark] = useState<ExternalMarketBenchmark | null>(null);
+  const [externalNewsItems, setExternalNewsItems] = useState<ExternalNewsDigestItem[]>([]);
+  const [climateRegion, setClimateRegion] = useState<PublicClimateRegion>('SUDESTE');
+  const [climateForecast, setClimateForecast] = useState<PublicClimateForecast | null>(null);
+  const [isLoadingClimate, setIsLoadingClimate] = useState(false);
   const [priceFilter, setPriceFilter] = useState<'ALL' | PublicMarketPriceCategory>('ALL');
 
   const formatCurrency = (value: number, currency = 'BRL') =>
@@ -60,6 +77,9 @@ const PublicMarketView: React.FC = () => {
           summaryResult,
           pricesResult,
           indexResult,
+          externalBenchmarkResult,
+          externalNewsResult,
+          climateForecastResult,
         ] = await Promise.allSettled([
           publicMarketService.listMarketTrends(),
           publicMarketService.listRegionalStats(),
@@ -69,6 +89,9 @@ const PublicMarketView: React.FC = () => {
           publicMarketService.getPublicMarketSummary(),
           publicMarketService.listPublicMarketPrices(),
           publicMarketService.getInputCostIndex(),
+          publicMarketService.getExternalMarketBenchmark(),
+          publicMarketService.getExternalNewsDigest(),
+          publicMarketService.getClimateForecast(climateRegion),
         ]);
 
         const publicPricesData = pricesResult.status === 'fulfilled' ? pricesResult.value : [];
@@ -103,6 +126,9 @@ const PublicMarketView: React.FC = () => {
         setPublicPrices(publicPricesData);
         setInputCostIndex(inputCostIndexData);
         setMarketSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : fallbackSummary);
+        setExternalBenchmark(externalBenchmarkResult.status === 'fulfilled' ? externalBenchmarkResult.value : null);
+        setExternalNewsItems(externalNewsResult.status === 'fulfilled' ? externalNewsResult.value.items : []);
+        setClimateForecast(climateForecastResult.status === 'fulfilled' ? climateForecastResult.value : null);
 
         const failedRequests = [
           trendsResult,
@@ -113,9 +139,12 @@ const PublicMarketView: React.FC = () => {
           summaryResult,
           pricesResult,
           indexResult,
+          externalBenchmarkResult,
+          externalNewsResult,
+          climateForecastResult,
         ].filter((result) => result.status === 'rejected').length;
 
-        if (failedRequests === 8) {
+        if (failedRequests === 11) {
           setLoadError('Nao foi possivel carregar o mercado publico.');
         } else if (failedRequests > 0) {
           setLoadNotice('Alguns indicadores estao indisponiveis no momento, mas a visualizacao principal foi carregada.');
@@ -130,9 +159,59 @@ const PublicMarketView: React.FC = () => {
     void loadPublicMarket();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadClimate = async () => {
+      setIsLoadingClimate(true);
+      try {
+        const forecast = await publicMarketService.getClimateForecast(climateRegion);
+        if (active) {
+          setClimateForecast(forecast);
+        }
+      } catch {
+        if (active) {
+          setClimateForecast(null);
+        }
+      } finally {
+        if (active) {
+          setIsLoadingClimate(false);
+        }
+      }
+    };
+
+    void loadClimate();
+    return () => {
+      active = false;
+    };
+  }, [climateRegion]);
+
   const visiblePriceItems = useMemo(
     () => publicPrices.filter((item) => (priceFilter === 'ALL' ? true : item.category === priceFilter)),
     [priceFilter, publicPrices]
+  );
+  const hasInternalAverage = useMemo(
+    () => publicPrices.some((item) => Number.isFinite(item.price) && item.price > 0),
+    [publicPrices]
+  );
+  const externalBenchmarkItems = useMemo(() => externalBenchmark?.items ?? [], [externalBenchmark]);
+  const visibleExternalBenchmarkItems = useMemo(
+    () => externalBenchmarkItems.filter((item) => (priceFilter === 'ALL' ? true : item.category === priceFilter)),
+    [externalBenchmarkItems, priceFilter]
+  );
+  const visibleNewsItems = useMemo<ExternalNewsDigestItem[]>(
+    () =>
+      externalNewsItems.length > 0
+        ? externalNewsItems
+        : newsItems.map((item) => ({
+            id: item.id,
+            title: item.title,
+            summary: item.summary,
+            date: item.date,
+            category: 'Mercado',
+            sourceLabel: 'Dados internos do sistema',
+            link: '#',
+          })),
+    [externalNewsItems, newsItems]
   );
 
   const SaturationBar: React.FC<{ value: number; riskLevel: string }> = ({ value, riskLevel }) => {
@@ -197,49 +276,26 @@ const PublicMarketView: React.FC = () => {
         {loadError && <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg">{loadError}</div>}
         {loadNotice && <div className="mb-6 p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg">{loadNotice}</div>}
 
-        {activeTab !== 'about' && (
+        {activeTab !== 'about' && hasInternalAverage && marketTrends.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
             {marketTrends.map((m, i) => (
               <div key={`${m.commodity}-${i}`} className="bg-white rounded-lg shadow-lg p-6 border-b-4 border-emerald-500">
                 <h3 className="font-semibold text-slate-700">{m.commodity}</h3>
                 <div className="text-xl font-bold text-slate-800">{formatCurrency(m.price)}</div>
+                <p className="text-xs text-slate-500">{m.unit || '-'}</p>
                 <p className="text-sm text-emerald-600">{m.change}</p>
               </div>
             ))}
           </div>
         )}
+        {activeTab !== 'about' && !hasInternalAverage && externalBenchmarkItems.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 mb-8">
+            Medias internas ainda nao disponiveis. As medias externas verificadas estao em destaque temporariamente.
+          </div>
+        )}
 
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-md p-8 border-l-4 border-emerald-600">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold text-slate-800">Indices Publicos</h3>
-                <span className="text-xs text-slate-500">
-                  Atualizado: {marketSummary?.updatedAt ? new Date(marketSummary.updatedAt).toLocaleString('pt-BR') : '-'}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <p className="text-xs text-slate-500">Commodities</p>
-                  <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.COMMODITY ?? 0}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <p className="text-xs text-slate-500">Animais</p>
-                  <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.LIVESTOCK ?? 0}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <p className="text-xs text-slate-500">Insumos</p>
-                  <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.INPUT ?? 0}</p>
-                </div>
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-xs text-slate-500">Indice de Insumos (7d / 30d)</p>
-                  <p className="text-lg font-bold text-slate-800">
-                    {inputCostIndex ? `${formatPct(inputCostIndex.window7d)} / ${formatPct(inputCostIndex.window30d)}` : 'Sem dados'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <div className="bg-white rounded-xl shadow-md p-8">
               <div className="flex flex-wrap gap-2 mb-4">
                 {CATEGORY_FILTERS.map((filter) => (
@@ -254,41 +310,135 @@ const PublicMarketView: React.FC = () => {
                   </button>
                 ))}
               </div>
-              {visiblePriceItems.length === 0 ? (
-                <div className="text-sm text-slate-500 border border-dashed border-slate-300 rounded-lg p-4">
-                  Sem dados de indices publicos no momento.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-slate-500 border-b">
-                      <tr>
-                        <th className="py-2">Ativo</th>
-                        <th className="py-2">Categoria</th>
-                        <th className="py-2">Preco</th>
-                        <th className="py-2">1d</th>
-                        <th className="py-2">7d</th>
-                        <th className="py-2">30d</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visiblePriceItems.map((item) => (
-                        <tr key={`${item.symbol}-${item.category}`} className="border-b last:border-b-0">
-                          <td className="py-2">
-                            <p className="font-semibold text-slate-800">{item.name}</p>
-                            <p className="text-xs text-slate-500">{item.symbol}</p>
-                          </td>
-                          <td className="py-2">{item.category}</td>
-                          <td className="py-2">{formatCurrency(item.price, item.currency)}</td>
-                          <td className={`py-2 ${item.change1d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change1d)}</td>
-                          <td className={`py-2 ${item.change7d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change7d)}</td>
-                          <td className={`py-2 ${item.change30d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change30d)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+              {hasInternalAverage && (
+                <div className="space-y-6">
+                  <div className="rounded-xl border-l-4 border-emerald-600 p-6 bg-slate-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-2xl font-bold text-slate-800">Indices Internos (Protagonista)</h3>
+                      <span className="text-xs text-slate-500">
+                        Atualizado: {marketSummary?.updatedAt ? new Date(marketSummary.updatedAt).toLocaleString('pt-BR') : '-'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                        <p className="text-xs text-slate-500">Commodities</p>
+                        <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.COMMODITY ?? 0}</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                        <p className="text-xs text-slate-500">Animais</p>
+                        <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.LIVESTOCK ?? 0}</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                        <p className="text-xs text-slate-500">Insumos</p>
+                        <p className="text-2xl font-bold text-slate-800">{marketSummary?.countsByCategory.INPUT ?? 0}</p>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <p className="text-xs text-slate-500">Indice de Insumos (7d / 30d)</p>
+                        <p className="text-lg font-bold text-slate-800">
+                          {inputCostIndex ? `${formatPct(inputCostIndex.window7d)} / ${formatPct(inputCostIndex.window30d)}` : 'Sem dados'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {visiblePriceItems.length === 0 ? (
+                    <div className="text-sm text-slate-500 border border-dashed border-slate-300 rounded-lg p-4">
+                      Sem dados de indices internos no momento.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-left text-slate-500 border-b">
+                          <tr>
+                            <th className="py-2">Ativo</th>
+                            <th className="py-2">Categoria</th>
+                            <th className="py-2">Unidade</th>
+                            <th className="py-2">Preco interno</th>
+                            <th className="py-2">1d</th>
+                            <th className="py-2">7d</th>
+                            <th className="py-2">30d</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visiblePriceItems.map((item) => (
+                            <tr key={`${item.symbol}-${item.category}`} className="border-b last:border-b-0">
+                              <td className="py-2">
+                                <p className="font-semibold text-slate-800">{item.name}</p>
+                                <p className="text-xs text-slate-500">{item.symbol}</p>
+                              </td>
+                              <td className="py-2">{item.category}</td>
+                              <td className="py-2">{item.unit || '-'}</td>
+                              <td className="py-2">{formatCurrency(item.price, item.currency)}</td>
+                              <td className={`py-2 ${item.change1d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change1d)}</td>
+                              <td className={`py-2 ${item.change7d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change7d)}</td>
+                              <td className={`py-2 ${item.change30d >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPct(item.change30d)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
+
+              <div className={`${hasInternalAverage ? 'mt-8' : ''} rounded-xl border-l-4 ${hasInternalAverage ? 'border-amber-500 bg-amber-50' : 'border-emerald-600 bg-emerald-50'} p-6`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-slate-800">
+                    {hasInternalAverage ? 'Media Externa para Comparacao' : 'Media Externa Verificada (Protagonista Temporario)'}
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    Atualizado: {externalBenchmark?.updatedAt ? new Date(externalBenchmark.updatedAt).toLocaleString('pt-BR') : '-'}
+                  </span>
+                </div>
+                {visibleExternalBenchmarkItems.length === 0 ? (
+                  <div className="text-sm text-slate-600 border border-dashed border-slate-300 rounded-lg p-4 bg-white">
+                    Sem media externa disponivel neste momento.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm bg-white rounded-lg">
+                      <thead className="text-left text-slate-500 border-b">
+                        <tr>
+                          <th className="py-2 px-2">Produto</th>
+                          <th className="py-2 px-2">Categoria</th>
+                          <th className="py-2 px-2">Unidade padrao</th>
+                          {hasInternalAverage && <th className="py-2 px-2">Preco interno</th>}
+                          <th className="py-2 px-2">Media externa</th>
+                          {hasInternalAverage && <th className="py-2 px-2">Gap</th>}
+                          <th className="py-2 px-2">Amostras</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleExternalBenchmarkItems.map((item) => (
+                          <tr key={item.id} className="border-b last:border-b-0">
+                            <td className="py-2 px-2">
+                              <p className="font-semibold text-slate-800">{item.name}</p>
+                              <p className="text-xs text-slate-500">{item.symbol}</p>
+                            </td>
+                            <td className="py-2 px-2">{item.category}</td>
+                            <td className="py-2 px-2">{item.unit || '-'}</td>
+                            {hasInternalAverage && (
+                              <td className="py-2 px-2">
+                                {item.internalPrice === null ? '-' : formatCurrency(item.internalPrice, item.currency)}
+                              </td>
+                            )}
+                            <td className="py-2 px-2 font-semibold text-slate-800">
+                              {formatCurrency(item.externalAveragePrice, item.currency)}
+                            </td>
+                            {hasInternalAverage && (
+                              <td className={`py-2 px-2 ${item.spreadPct === null ? 'text-slate-400' : item.spreadPct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                {item.spreadPct === null ? '-' : formatPct(item.spreadPct)}
+                              </td>
+                            )}
+                            <td className="py-2 px-2">{item.externalSampleSize}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -308,36 +458,98 @@ const PublicMarketView: React.FC = () => {
         )}
 
         {activeTab === 'about' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h3 className="text-xl font-bold text-slate-800 mb-4">Noticias de Mercado</h3>
-              <div className="space-y-4">
-                {newsItems.slice(0, 6).map((item) => (
-                  <article key={item.id} className="border-b last:border-b-0 pb-3 last:pb-0">
-                    <p className="text-xs text-slate-500">{item.date} · {item.source}</p>
-                    <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                    <p className="text-xs text-slate-600">{item.summary}</p>
-                  </article>
-                ))}
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-sky-500">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <h3 className="text-xl font-bold text-slate-800">Clima e Previsao por Regiao</h3>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={climateRegion}
+                    onChange={(event) => setClimateRegion(event.target.value as PublicClimateRegion)}
+                    className="p-2 border border-slate-300 rounded-md bg-white text-sm font-semibold text-slate-700"
+                  >
+                    {CLIMATE_REGION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-slate-500">
+                    Atualizado: {climateForecast?.updatedAt ? new Date(climateForecast.updatedAt).toLocaleString('pt-BR') : '-'}
+                  </span>
+                </div>
               </div>
+
+              {isLoadingClimate && (
+                <div className="text-sm text-slate-500 border border-dashed border-slate-300 rounded-lg p-4">
+                  Atualizando previsao climatica...
+                </div>
+              )}
+
+              {!isLoadingClimate && climateForecast?.days && climateForecast.days.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Referencia regional: <span className="font-semibold text-slate-800">{climateForecast.referenceCity}</span>
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {climateForecast.days.slice(0, 7).map((day) => (
+                      <div key={day.date} className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                        <p className="text-xs text-slate-500">{new Date(day.date).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-sm font-bold text-slate-800">
+                          {day.tempMinC.toFixed(0)}°C / {day.tempMaxC.toFixed(0)}°C
+                        </p>
+                        <p className="text-xs text-slate-600">Chuva: {day.precipitationProbabilityPct.toFixed(0)}%</p>
+                        <p className="text-xs text-slate-600">Acumulo: {day.precipitationMm.toFixed(1)} mm</p>
+                        <p className="text-xs text-slate-600">Vento: {day.windMaxKmh.toFixed(0)} km/h</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!isLoadingClimate && (!climateForecast || climateForecast.days.length === 0) && (
+                <div className="text-sm text-slate-500 border border-dashed border-slate-300 rounded-lg p-4">
+                  Previsao climatica indisponivel para esta regiao no momento.
+                </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h3 className="text-xl font-bold text-slate-800 mb-4">Leiloes e Estatisticas</h3>
-              <div className="space-y-4">
-                {auctionListings.slice(0, 3).map((item) => (
-                  <div key={item.id} className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                    <p className="text-xs text-slate-600">{item.location} · {item.date}</p>
-                  </div>
-                ))}
-                {regionalStats.slice(0, 4).map((item) => (
-                  <div key={item.label} className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs text-slate-500">{item.label}</p>
-                    <p className="text-lg font-bold text-slate-800">{item.value}</p>
-                    <p className="text-xs text-slate-600">{item.description}</p>
-                  </div>
-                ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-4">Noticias Relevantes (Fontes Verificadas)</h3>
+                <div className="space-y-4">
+                  {visibleNewsItems.slice(0, 6).map((item) => (
+                    <article key={item.id} className="border-b last:border-b-0 pb-3 last:pb-0">
+                      <p className="text-xs text-slate-500">{new Date(item.date).toLocaleDateString('pt-BR')} · {item.sourceLabel}</p>
+                      <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                      <p className="text-xs text-slate-600">{item.summary}</p>
+                      {item.link !== '#' && (
+                        <a className="text-xs text-emerald-700 font-semibold" href={item.link} target="_blank" rel="noreferrer">
+                          Ler atualizacao
+                        </a>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-4">Leiloes e Estatisticas</h3>
+                <div className="space-y-4">
+                  {auctionListings.slice(0, 3).map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-200 p-3">
+                      <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                      <p className="text-xs text-slate-600">{item.location} · {item.date}</p>
+                    </div>
+                  ))}
+                  {regionalStats.slice(0, 4).map((item) => (
+                    <div key={item.label} className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500">{item.label}</p>
+                      <p className="text-lg font-bold text-slate-800">{item.value}</p>
+                      <p className="text-xs text-slate-600">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

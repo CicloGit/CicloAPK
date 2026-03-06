@@ -1,4 +1,4 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   AnimalProductionDetails,
@@ -7,6 +7,7 @@ import {
   ProjectStage,
   SectorSpecificData,
 } from '../types';
+import { hasTenantAccess, resolveTenantContext } from './tenantContext';
 
 const financialDetailsCollection = collection(db, 'financialDetails');
 const animalDetailsCollection = collection(db, 'animalDetails');
@@ -62,7 +63,8 @@ const toAuditEvent = (id: string, raw: Record<string, unknown>): AuditEvent => (
 });
 export const producerDashboardService = {
   async listFinancialDetails(): Promise<Record<string, FinancialDetails>> {
-    const snapshot = await getDocs(financialDetailsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(financialDetailsCollection, where('tenantId', '==', context.tenantId)));
     const acc: Record<string, FinancialDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toFinancialDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
@@ -72,7 +74,8 @@ export const producerDashboardService = {
   },
 
   async listAnimalDetails(): Promise<Record<string, AnimalProductionDetails>> {
-    const snapshot = await getDocs(animalDetailsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(animalDetailsCollection, where('tenantId', '==', context.tenantId)));
     const acc: Record<string, AnimalProductionDetails> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toAnimalDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
@@ -82,7 +85,8 @@ export const producerDashboardService = {
   },
 
   async listSectorDetails(): Promise<Record<string, SectorSpecificData>> {
-    const snapshot = await getDocs(sectorDetailsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(sectorDetailsCollection, where('tenantId', '==', context.tenantId)));
     const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
@@ -92,7 +96,8 @@ export const producerDashboardService = {
   },
 
   async listStageDetails(): Promise<Record<string, SectorSpecificData>> {
-    const snapshot = await getDocs(stageDetailsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(stageDetailsCollection, where('tenantId', '==', context.tenantId)));
     const acc: Record<string, SectorSpecificData> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       const details = toSectorDetails(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
@@ -102,7 +107,8 @@ export const producerDashboardService = {
   },
 
   async listProjectStages(): Promise<Record<string, ProjectStage[]>> {
-    const snapshot = await getDocs(projectStagesCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(projectStagesCollection, where('tenantId', '==', context.tenantId)));
     const acc: Record<string, ProjectStage[]> = {};
     snapshot.docs.forEach((docSnapshot: any) => {
       acc[docSnapshot.id] = toProjectStages(docSnapshot.id, docSnapshot.data() as Record<string, unknown>);
@@ -111,16 +117,22 @@ export const producerDashboardService = {
   },
 
   async listAuditEvents(): Promise<AuditEvent[]> {
-    const snapshot = await getDocs(auditEventsCollection);
+    const context = await resolveTenantContext();
+    const snapshot = await getDocs(query(auditEventsCollection, where('tenantId', '==', context.tenantId)));
     return snapshot.docs.map((docSnapshot: any) => toAuditEvent(docSnapshot.id, docSnapshot.data() as Record<string, unknown>));
   },
 
   async getStageDetails(stageId: string): Promise<SectorSpecificData | null> {
+    const context = await resolveTenantContext();
     const snapshot = await getDoc(doc(db, 'stageDetails', stageId));
     if (!snapshot.exists()) {
+      return null;
+    }
+    if (!hasTenantAccess(snapshot.data() as Record<string, unknown>, context)) {
       return null;
     }
     return toSectorDetails(snapshot.id, snapshot.data() as Record<string, unknown>);
   },
 };
+
 

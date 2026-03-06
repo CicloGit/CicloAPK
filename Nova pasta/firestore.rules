@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     function hasAnyRole() {
-      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Integradora', 'Fornecedor', 'Técnico', 'Tecnico', 'Investidor', 'Gestor de Trafego', 'Administrador'];
+      return hasUserDoc() && currentRole() in ['Produtor', 'Gestor', 'Operador', 'Integradora', 'Fornecedor', 'Leiloeiro', 'TÃ©cnico', 'Tecnico', 'Investidor', 'Gestor de Trafego', 'Administrador'];
     }
 
     function claimRole() {
@@ -46,17 +46,24 @@ service cloud.firestore {
       );
     }
 
-    function isSeedProducer() {
-      return signedIn()
-        && claimRole() == 'PRODUCER'
-        && request.auth.token.producerScopes is map
-        && request.auth.token.producerScopes.seedProducer == true;
-    }
-
     function isProducerRole() {
       return signedIn() && (
         claimRole() == 'PRODUCER' ||
         (hasUserDoc() && currentRole() == 'Produtor')
+      );
+    }
+
+    function hasSeedProducerScope() {
+      return signedIn()
+        && request.auth.token.producerScopes is map
+        && request.auth.token.producerScopes.seedProducer == true;
+    }
+
+    function canAccessTenantSeeds(tenantId) {
+      return hasTenantAccess(tenantId) && (
+        (isProducerRole() && hasSeedProducerScope()) ||
+        isManagerRole() ||
+        isAdminRole()
       );
     }
 
@@ -85,6 +92,141 @@ service cloud.firestore {
       return signedIn() && (
         claimRole() == 'ADMIN' ||
         (hasUserDoc() && currentRole() == 'Administrador')
+      );
+    }
+
+    function isAuctioneerRole() {
+      return signedIn() && (
+        claimRole() == 'AUCTIONEER' ||
+        (hasUserDoc() && currentRole() == 'Leiloeiro')
+      );
+    }
+
+    function isOperatorRole() {
+      return signedIn() && (
+        claimRole() == 'OPERATOR' ||
+        (hasUserDoc() && currentRole() == 'Operador')
+      );
+    }
+
+    function isTrafficManagerRole() {
+      return signedIn() && (
+        claimRole() == 'TRAFFIC_MANAGER' ||
+        (hasUserDoc() && currentRole() == 'Gestor de Trafego')
+      );
+    }
+
+    function isInvestorRole() {
+      return signedIn() && (
+        claimRole() == 'INVESTOR' ||
+        (hasUserDoc() && currentRole() == 'Investidor')
+      );
+    }
+
+    function hasResourceTenantAccess(data) {
+      return signedIn() && (
+        (data.tenantId is string && hasTenantAccess(data.tenantId)) ||
+        (!(data.tenantId is string) && (
+          (data.createdByUserId is string && request.auth.uid == data.createdByUserId) ||
+          (data.userId is string && request.auth.uid == data.userId) ||
+          (data.requestorUserId is string && request.auth.uid == data.requestorUserId)
+        ))
+      );
+    }
+
+    function hasRequestedTenantAccess(data) {
+      return signedIn() && data.tenantId is string && hasTenantAccess(data.tenantId);
+    }
+
+    function tenantScopedUpdateAllowed() {
+      return (
+        resource.data.tenantId is string &&
+        request.resource.data.tenantId is string &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        hasTenantAccess(resource.data.tenantId)
+      ) || (
+        !(resource.data.tenantId is string) &&
+        hasRequestedTenantAccess(request.resource.data)
+      );
+    }
+
+    function canManageStockData() {
+      return isProducerRole() || isSupplierRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageFinanceData() {
+      return isProducerRole() || isSupplierRole() || isIntegratorRole() || isInvestorRole() || isTrafficManagerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageLogisticsData() {
+      return isProducerRole() || isSupplierRole() || isIntegratorRole() || isOperatorRole() || isTrafficManagerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageContractsData() {
+      return isProducerRole() || isIntegratorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageSupplierData() {
+      return isSupplierRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageIntegratorData() {
+      return isIntegratorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canReadProducerDirectory() {
+      return isProducerRole() || isSupplierRole() || isIntegratorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canReadNetworkNeeds() {
+      return isProducerRole() || isSupplierRole() || isIntegratorRole() || isOperatorRole() || isAuctioneerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageProducerCoreData() {
+      return isProducerRole() || isOperatorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageCarbonData() {
+      return isProducerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageInvestorData() {
+      return isInvestorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageFutureMarketData() {
+      return isProducerRole() || isInvestorRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canUseOperatorPortal() {
+      return isOperatorRole() || isProducerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canDecideOperatorRequest() {
+      return isProducerRole() || isManagerRole() || isAdminRole();
+    }
+
+    function canManageOperatorAccess() {
+      return signedIn() && (
+        isProducerRole() ||
+        isManagerRole() ||
+        isAdminRole()
+      );
+    }
+
+    function canManageAuctionOps() {
+      return signedIn() && (
+        isAuctioneerRole() ||
+        isManagerRole() ||
+        isAdminRole()
+      );
+    }
+
+    function canCaptureAuctionSignals() {
+      return signedIn() && (
+        canManageAuctionOps() ||
+        claimRole() == 'OPERATOR' ||
+        (hasUserDoc() && currentRole() == 'Operador')
       );
     }
 
@@ -126,53 +268,73 @@ service cloud.firestore {
     }
 
     match /properties/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if signedIn() && hasResourceTenantAccess(resource.data);
+      allow create: if isProducerRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if isProducerRole() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /pastures/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if signedIn() && hasResourceTenantAccess(resource.data);
+      allow create: if isProducerRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if isProducerRole() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /productionProjects/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if signedIn() && hasResourceTenantAccess(resource.data);
+      allow create: if isProducerRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if isProducerRole() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /inventoryItems/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageStockData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageStockData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageStockData() && tenantScopedUpdateAllowed();
+      allow delete: if false;
     }
 
     match /stockMovements/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageStockData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageStockData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageStockData() && tenantScopedUpdateAllowed();
+      allow delete: if false;
     }
 
     match /auditEvents/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if isAdminRole() && tenantScopedUpdateAllowed();
+      allow delete: if false;
     }
 
     match /bankAccounts/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageFinanceData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFinanceData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFinanceData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /receivables/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageFinanceData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFinanceData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFinanceData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /expenses/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageFinanceData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFinanceData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFinanceData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /transactions/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageFinanceData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFinanceData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFinanceData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /marketplaceListings/{docId} {
@@ -194,98 +356,264 @@ service cloud.firestore {
     }
 
     match /corporateCards/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /partnerStores/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && (
+        hasResourceTenantAccess(resource.data) ||
+        (resource.data.visibility is string && resource.data.visibility in ['PUBLIC', 'OPEN_MARKET'])
+      );
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /logisticsEntries/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if (
+        canManageLogisticsData() && hasResourceTenantAccess(resource.data)
+      ) || (
+        signedIn() &&
+        resource.data.carrierUserId is string &&
+        resource.data.carrierUserId == request.auth.uid
+      ) || (
+        signedIn() &&
+        resource.data.openForMarketplace == true &&
+        resource.data.status == 'SOLICITADO'
+      );
+      allow create: if canManageLogisticsData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageLogisticsData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /contracts/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageContractsData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageContractsData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageContractsData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /salesOffers/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /employees/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /timeRecords/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /payrollEntries/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /ppeOrders/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /marketTrends/{docId} {
       allow read: if true;
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
     }
 
     match /reportConsumptions/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /reportCapacity/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /reportLotAudits/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /sustainablePractices/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageCarbonData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageCarbonData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageCarbonData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /carbonProjects/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageCarbonData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageCarbonData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageCarbonData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /carbonCredits/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageCarbonData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageCarbonData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageCarbonData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /regionalStats/{docId} {
       allow read: if true;
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
     }
 
     match /newsItems/{docId} {
       allow read: if true;
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
     }
 
     match /auctionListings/{docId} {
       allow read: if true;
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
+    }
+
+    match /auctioneerProfiles/{docId} {
+      allow read: if signedIn() && (
+        (resource.data.tenantId is string && hasTenantAccess(resource.data.tenantId) && canManageAuctionOps()) ||
+        request.auth.uid == docId
+      );
+      allow create: if canManageAuctionOps() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId) &&
+        (request.auth.uid == docId || isManagerRole() || isAdminRole());
+      allow update: if canManageAuctionOps() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId) &&
+        (request.auth.uid == docId || isManagerRole() || isAdminRole());
+      allow delete: if isAdminRole();
+    }
+
+    match /auctionLots/{docId} {
+      allow read: if signedIn() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+      allow create: if canManageAuctionOps() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if canManageAuctionOps() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId) &&
+        request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if false;
+    }
+
+    match /auctionEvents/{docId} {
+      allow read: if signedIn() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+      allow create: if canManageAuctionOps() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if canManageAuctionOps() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId) &&
+        request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if false;
+    }
+
+    match /auctionBidSignals/{docId} {
+      allow read: if signedIn() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+      allow create: if canCaptureAuctionSignals() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if canManageAuctionOps() &&
+        resource.data.tenantId is string &&
+        request.resource.data.tenantId is string &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        hasTenantAccess(resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /externalMarketplaceBridges/{docId} {
+      allow read: if signedIn() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+      allow create: if (
+          isIntegratorRole() ||
+          isSupplierRole() ||
+          isManagerRole() ||
+          isAdminRole()
+        ) &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if (
+          isIntegratorRole() ||
+          isSupplierRole() ||
+          isManagerRole() ||
+          isAdminRole()
+        ) &&
+        resource.data.tenantId is string &&
+        request.resource.data.tenantId is string &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        hasTenantAccess(resource.data.tenantId);
+      allow delete: if isAdminRole() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+    }
+
+    match /externalMarketplaceItems/{docId} {
+      allow read: if signedIn() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
+      allow create: if (
+          isIntegratorRole() ||
+          isSupplierRole() ||
+          isManagerRole() ||
+          isAdminRole()
+        ) &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if (
+          isIntegratorRole() ||
+          isSupplierRole() ||
+          isManagerRole() ||
+          isAdminRole()
+        ) &&
+        resource.data.tenantId is string &&
+        request.resource.data.tenantId is string &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        hasTenantAccess(resource.data.tenantId);
+      allow delete: if (
+          isIntegratorRole() ||
+          isSupplierRole() ||
+          isManagerRole() ||
+          isAdminRole()
+        ) &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
     }
 
     match /marketSaturation/{docId} {
       allow read: if true;
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
     }
 
     match /publicMarketPrices/{docId} {
@@ -309,78 +637,218 @@ service cloud.firestore {
     }
 
     match /operatorRequests/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canUseOperatorPortal() && hasResourceTenantAccess(resource.data);
+      allow create: if canUseOperatorPortal() &&
+        hasRequestedTenantAccess(request.resource.data) &&
+        (
+          !isOperatorRole() ||
+          (
+            request.resource.data.requesterUserId is string &&
+            request.resource.data.requesterUserId == request.auth.uid
+          )
+        );
+      allow update: if tenantScopedUpdateAllowed() &&
+        (
+          canDecideOperatorRequest() ||
+          (
+            isOperatorRole() &&
+            resource.data.requesterUserId is string &&
+            resource.data.requesterUserId == request.auth.uid &&
+            request.resource.data.status == resource.data.status
+          )
+        );
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /operatorAccessAuthorizations/{docId} {
+      allow read: if signedIn() && (
+        (
+          canManageOperatorAccess() &&
+          resource.data.tenantId is string &&
+          hasTenantAccess(resource.data.tenantId)
+        ) ||
+        (
+          resource.data.operatorAuthEmail is string &&
+          request.auth.token.email is string &&
+          resource.data.operatorAuthEmail == request.auth.token.email
+        )
+      );
+      allow create: if canManageOperatorAccess() &&
+        request.resource.data.tenantId is string &&
+        hasTenantAccess(request.resource.data.tenantId);
+      allow update: if (
+        canManageOperatorAccess() &&
+        resource.data.tenantId is string &&
+        request.resource.data.tenantId is string &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        hasTenantAccess(resource.data.tenantId)
+      ) || (
+        signedIn() &&
+        request.auth.uid is string &&
+        request.auth.token.email is string &&
+        resource.data.status == 'ATIVO' &&
+        request.resource.data.status == 'CONCLUIDO' &&
+        request.resource.data.tenantId == resource.data.tenantId &&
+        request.resource.data.producerId == resource.data.producerId &&
+        request.resource.data.producerName == resource.data.producerName &&
+        request.resource.data.propertyId == resource.data.propertyId &&
+        request.resource.data.propertyName == resource.data.propertyName &&
+        request.resource.data.propertyRegistrationNumber == resource.data.propertyRegistrationNumber &&
+        request.resource.data.operatorName == resource.data.operatorName &&
+        request.resource.data.operatorDocumentNumber == resource.data.operatorDocumentNumber &&
+        request.resource.data.createdByUserId == resource.data.createdByUserId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        resource.data.operatorAuthEmail is string &&
+        request.resource.data.operatorAuthEmail is string &&
+        request.auth.token.email == resource.data.operatorAuthEmail &&
+        request.resource.data.operatorAuthEmail == resource.data.operatorAuthEmail &&
+        request.resource.data.linkedUserId == request.auth.uid &&
+        request.resource.data.linkedAt is string
+      );
+      allow delete: if canManageOperatorAccess() &&
+        resource.data.tenantId is string &&
+        hasTenantAccess(resource.data.tenantId);
     }
 
     match /operatorTasks/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canUseOperatorPortal() && hasResourceTenantAccess(resource.data);
+      allow create: if canDecideOperatorRequest() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if tenantScopedUpdateAllowed() &&
+        (
+          canDecideOperatorRequest() ||
+          (
+            isOperatorRole() &&
+            resource.data.assignedOperatorUserId is string &&
+            resource.data.assignedOperatorUserId == request.auth.uid
+          )
+        );
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /supplierOrders/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageSupplierData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageSupplierData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageSupplierData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /marketplaceOrders/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /supplierFinancials/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageSupplierData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageSupplierData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageSupplierData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /supplierPdvConnectors/{docId} {
+      allow read: if canManageSupplierData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageSupplierData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageSupplierData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /supplierPdvImportBatches/{docId} {
+      allow read: if canManageSupplierData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageSupplierData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageSupplierData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /integratedProducers/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canReadProducerDirectory() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /partnershipOffers/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageIntegratorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /integratorMessages/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageIntegratorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /integratorBiologicalAssets/{docId} {
+      allow read: if canManageIntegratorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /integratorWholesaleSales/{docId} {
+      allow read: if canManageIntegratorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /integratorProducerFinanceEntries/{docId} {
+      allow read: if canManageIntegratorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageIntegratorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageIntegratorData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /financialDetails/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /animalDetails/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /sectorDetails/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /stageDetails/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /projectStages/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /technicianKpis/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /technicianReports/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /seedFields/{docId} {
@@ -396,138 +864,291 @@ service cloud.firestore {
     }
 
     match /investorKpis/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /investorProjects/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /investorMarketSignals/{docId} {
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /investorDemands/{docId} {
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /investorLiquidationForecasts/{docId} {
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /investorMovements/{docId} {
+      allow read: if canManageInvestorData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageInvestorData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageInvestorData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /managerKpis/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+      allow create: if (isManagerRole() || isAdminRole()) && hasRequestedTenantAccess(request.resource.data);
+      allow update: if (isManagerRole() || isAdminRole()) && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /managerActivities/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+      allow create: if (isManagerRole() || isAdminRole()) && hasRequestedTenantAccess(request.resource.data);
+      allow update: if (isManagerRole() || isAdminRole()) && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /managementAlerts/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /managementHistory/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerAnimalLots/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerAnimals/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerInputs/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerOperationalExpenses/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerOperationalActivities/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerTrackingCodes/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if false;
+    }
+
+    match /producerCultures/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
+    }
+
+    match /producerCultureAnalyses/{docId} {
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if false;
     }
 
     match /marketOpportunities/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageFutureMarketData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFutureMarketData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFutureMarketData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /futureMarketLocks/{docId} {
+      allow read: if canManageFutureMarketData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageFutureMarketData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageFutureMarketData() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /fieldDiaryEntries/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if canManageProducerCoreData() && hasResourceTenantAccess(resource.data);
+      allow create: if canManageProducerCoreData() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canManageProducerCoreData() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /liveHandlingContext/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /liveHandlingHistory/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /integrationStatus/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /integrationRequests/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if (isManagerRole() || isAdminRole()) && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
+    }
+
+    match /networkNeeds/{docId} {
+      allow read: if canReadNetworkNeeds() && (
+        hasResourceTenantAccess(resource.data) ||
+        (resource.data.visibility is string && resource.data.visibility == 'NETWORK')
+      );
+      allow create: if canReadNetworkNeeds() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if canReadNetworkNeeds() && tenantScopedUpdateAllowed();
+      allow delete: if (isManagerRole() || isAdminRole()) && hasResourceTenantAccess(resource.data);
     }
 
     match /aiAnalyses/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /operationalActions/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /customInputRequests/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /customInputFormulas/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /customInputPastures/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /systemConfigs/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /dataDictionaryEntities/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /operationsTable/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /eventsMatrix/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /liquidationFlows/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /architectureNodes/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /legalContracts/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /legalLicenses/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /legalComplianceAlerts/{docId} {
-      allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow read: if hasAnyRole() && hasResourceTenantAccess(resource.data);
+      allow create: if hasAnyRole() && hasRequestedTenantAccess(request.resource.data);
+      allow update: if hasAnyRole() && tenantScopedUpdateAllowed();
+      allow delete: if isAdminRole() && hasResourceTenantAccess(resource.data);
     }
 
     match /carRegistry/{docId} {
       allow read: if signedIn();
-      allow write: if hasAnyRole();
+      allow write: if isAdminRole();
     }
 
     match /carQueries/{docId} {
@@ -536,18 +1157,21 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId}/seedFields/{docId} {
-      allow read, create, update: if false;
-      allow delete: if false;
+      allow read: if canAccessTenantSeeds(tenantId);
+      allow create, update: if canAccessTenantSeeds(tenantId);
+      allow delete: if isAdminRole() && hasTenantAccess(tenantId);
     }
 
     match /tenants/{tenantId}/seedLots/{docId} {
-      allow read, create, update: if false;
-      allow delete: if false;
+      allow read: if canAccessTenantSeeds(tenantId);
+      allow create, update: if canAccessTenantSeeds(tenantId);
+      allow delete: if isAdminRole() && hasTenantAccess(tenantId);
     }
 
     match /tenants/{tenantId}/seedCertifications/{docId} {
-      allow read, create, update: if false;
-      allow delete: if false;
+      allow read: if canAccessTenantSeeds(tenantId);
+      allow create, update: if canAccessTenantSeeds(tenantId);
+      allow delete: if isAdminRole() && hasTenantAccess(tenantId);
     }
 
     match /tenants/{tenantId}/marketListings/{docId} {

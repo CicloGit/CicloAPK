@@ -183,7 +183,7 @@ const PropertyMapView: React.FC<PropertyMapViewProps> = ({ property, pastures })
                 </svg>
 
                 <div className="absolute bottom-4 left-4 bg-slate-900/80 p-2 rounded-lg text-white text-[10px] backdrop-blur-sm border border-slate-700 shadow-xl z-20">
-                    Fonte da Imagem: Satélite (Simulado) & Overlays Vetoriais Ciclo+
+                    Fonte da Imagem: Satelite e overlays vetoriais Ciclo+
                 </div>
             </div>
         </div>
@@ -191,3 +191,4 @@ const PropertyMapView: React.FC<PropertyMapViewProps> = ({ property, pastures })
 };
 
 export default PropertyMapView;
+
